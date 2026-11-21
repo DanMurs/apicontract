@@ -255,6 +255,10 @@ export class ApiGisMap {
       zoom: CLUSTER_CENTER.zoom,
     });
 
+    if (this.map.attributionControl) {
+      this.map.attributionControl.setPrefix('АпиКонтракт ГИС');
+    }
+
     // Слой карты OpenStreetMap + спутниковые очертания полей
     const osmLayer = window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 18,
@@ -493,20 +497,53 @@ export class ApiGisMap {
             ✅ Безопасное расположение (за пределами сноса СЗР)
            </div>`;
 
-      window.L.marker([apiary.lat, apiary.lon], { icon })
+      const marker = window.L.marker([apiary.lat, apiary.lon], { icon, draggable: true })
         .bindPopup(
-          `<div style="min-width:230px;font-family:Inter,sans-serif;">
+          `<div style="min-width:240px;font-family:Inter,sans-serif;">
             <div style="font-weight:800;font-size:13.5px;">🐝 ${apiary.name}</div>
             <div style="font-size:12px;color:#526358;margin-bottom:6px;">${apiary.beekeeper} • Ветпаспорт: ${apiary.vetPassport}</div>
             <div style="font-size:12.5px;line-height:1.45;">
               <b>Мощность:</b> ${apiary.hivesCount} пчелосемей<br/>
               <b>Транспорт:</b> ${apiary.trailerType}<br/>
-              <b>Телефон:</b> ${apiary.phone}
+              <b>Телефон:</b> ${apiary.phone}<br/>
+              <span style="font-size:11px;color:#64748b;">💡 Метку можно перетащить мышью / пальцем по карте</span>
             </div>
             ${hazardBlock}
+            <div style="display:flex;gap:6px;margin-top:9px;">
+              <button data-edit-apiary="${apiary.id}" style="flex:1;padding:6px 8px;border:none;border-radius:6px;background:#f59e0b;color:#132a1e;font-size:12px;font-weight:700;cursor:pointer;">
+                ✏️ Изменить
+              </button>
+              <button data-delete-apiary="${apiary.id}" style="padding:6px 10px;border:1px solid #fca5a5;border-radius:6px;background:#fee2e2;color:#b91c1c;font-size:12px;font-weight:700;cursor:pointer;">
+                🗑️ Удалить
+              </button>
+            </div>
           </div>`
         )
         .addTo(this.layers.apiaries);
+
+      marker.on('dragend', (e) => {
+        const pos = e.target.getLatLng();
+        if (typeof this.callbacks.onMoveApiary === 'function') {
+          this.callbacks.onMoveApiary(apiary.id, pos.lat, pos.lng);
+        }
+      });
+
+      marker.on('popupopen', () => {
+        const editBtn = document.querySelector(`[data-edit-apiary="${apiary.id}"]`);
+        const delBtn = document.querySelector(`[data-delete-apiary="${apiary.id}"]`);
+        if (editBtn && this.callbacks.onEditApiary) {
+          editBtn.onclick = () => {
+            marker.closePopup();
+            this.callbacks.onEditApiary(apiary.id);
+          };
+        }
+        if (delBtn && this.callbacks.onDeleteApiary) {
+          delBtn.onclick = () => {
+            marker.closePopup();
+            this.callbacks.onDeleteApiary(apiary.id);
+          };
+        }
+      });
     }
   }
 }

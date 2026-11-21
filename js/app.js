@@ -5,11 +5,18 @@
 import {
   CLUSTER_CENTER,
   CROPS_DB,
+  PESTICIDE_CLASSES,
   INITIAL_FIELDS,
   INITIAL_APIARIES,
   INITIAL_SATURN_TREATMENTS,
 } from './data.js';
-import { ApiGisMap, analyzeSpatialCoverage, polygonCentroid, haversineKm } from './map.js';
+import {
+  ApiGisMap,
+  analyzeSpatialCoverage,
+  polygonCentroid,
+  haversineKm,
+  isPointInWindPlume,
+} from './map.js';
 import {
   calculateDualEconomics,
   evaluateMeteoConditions,
@@ -632,6 +639,104 @@ function openPassportModal(fieldId) {
   document.getElementById('passport-modal').classList.remove('hidden');
 }
 
+/* ==================== УПРАВЛЕНИЕ ПАСЕКАМИ ==================== */
+
+function populateApiaryFieldSelect() {
+  const sel = document.getElementById('ap-field');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">Свободный кочевой точок (по радиусу 2 км)</option>';
+  state.fields.forEach((f) => {
+    const crop = CROPS_DB[f.cropId];
+    sel.appendChild(new Option(`${crop.icon} ${f.name} (${f.areaHa} га)`, f.id));
+  });
+  if (current) sel.value = current;
+}
+
+function updateApiarySafetyPreview(lat, lon) {
+  const previewEl = document.getElementById('ap-safety-preview');
+  if (!previewEl) return;
+
+  const numLat = Number(lat);
+  const numLon = Number(lon);
+  if (!Number.isFinite(numLat) || !Number.isFinite(numLon)) {
+    previewEl.innerHTML = '';
+    return;
+  }
+
+  const hits = [];
+  for (const tr of state.treatments) {
+    const pInfo = PESTICIDE_CLASSES[tr.hazardClass] || PESTICIDE_CLASSES[3];
+    const distKm = haversineKm(numLat, numLon, tr.lat, tr.lon);
+    const inPlume = isPointInWindPlume(
+      numLat,
+      numLon,
+      tr.lat,
+      tr.lon,
+      state.wind.directionDeg,
+      state.wind.speedMs
+    );
+    if (distKm <= pInfo.bufferRadiusKm || inPlume) {
+      hits.push({ tr, pInfo, distKm, inPlume });
+    }
+  }
+
+  if (hits.length > 0) {
+    const h = hits[0];
+    previewEl.innerHTML = `<span class="status-pill danger" style="width:100%;justify-content:flex-start;border-radius:8px;padding:8px 10px;">
+      🚨 Точка в ${h.distKm.toFixed(1)} км от обработки ФГИС «Сатурн» ${h.tr.saturnNumber}${h.inPlume ? ' + прямо в ветровом шлейфе!' : ' (радиус 7 км).'}
+    </span>`;
+  } else {
+    previewEl.innerHTML = `<span class="status-pill safe" style="width:100%;justify-content:flex-start;border-radius:8px;padding:8px 10px;">
+      ✅ Безопасная точка стоянки (вне 7-км зон СЗР и ветрового сноса).
+    </span>`;
+  }
+}
+
+function openApiaryModal({ apiary = null, lat = null, lon = null } = {}) {
+  populateApiaryFieldSelect();
+  const isEdit = Boolean(apiary);
+  const idx = state.apiaries.length + 1;
+
+  document.getElementById('apiary-modal-title').textContent = isEdit
+    ? `✏️ Редактирование: ${apiary.name}`
+    : '🐝 Новый кочевой прицеп на карте';
+
+  document.getElementById('ap-id').value = isEdit ? apiary.id : '';
+  document.getElementById('ap-name').value = isEdit ? apiary.name : `Кочевой точок №${idx}`;
+  document.getElementById('ap-beekeeper').value = isEdit ? apiary.beekeeper : 'Дежурный пасечник кластера';
+  document.getElementById('ap-hives').value = isEdit ? apiary.hivesCount : 60;
+  document.getElementById('ap-trailer').value = isEdit
+    ? apiary.trailerType
+    : 'Кочевой прицеп-павильон (Дадан)';
+  document.getElementById('ap-field').value = isEdit && apiary.assignedFieldId ? apiary.assignedFieldId : '';
+  document.getElementById('ap-vet').value = isEdit ? apiary.vetPassport : `ВП-57-0881${idx}`;
+  document.getElementById('ap-phone').value = isEdit ? apiary.phone : '+7 (915) 440-22-18';
+
+  const targetLat = isEdit ? apiary.lat : Number((lat ?? CLUSTER_CENTER.lat).toFixed(5));
+  const targetLon = isEdit ? apiary.lon : Number((lon ?? CLUSTER_CENTER.lon).toFixed(5));
+  document.getElementById('ap-lat').value = targetLat;
+  document.getElementById('ap-lon').value = targetLon;
+
+  const delBtn = document.getElementById('btn-delete-apiary-modal');
+  delBtn.classList.toggle('hidden', !isEdit);
+  document.getElementById('btn-save-apiary').textContent = isEdit
+    ? 'Сохранить изменения'
+    : 'Поставить на карту';
+
+  updateApiarySafetyPreview(targetLat, targetLon);
+  document.getElementById('apiary-modal').classList.remove('hidden');
+}
+
+function deleteApiaryById(apiaryId) {
+  const target = state.apiaries.find((a) => a.id === apiaryId);
+  if (!target) return;
+  state.apiaries = state.apiaries.filter((a) => a.id !== apiaryId);
+  document.getElementById('apiary-modal').classList.add('hidden');
+  refreshAll();
+  showToast(`Пасека «${target.name}» удалена с карты, покрытие полей пересчитано.`);
+}
+
 /* ==================== НАВИГАЦИЯ И СОБЫТИЯ ==================== */
 
 function switchTab(tabName) {
@@ -743,6 +848,7 @@ function bindEvents() {
     };
 
     state.fields.unshift(newField);
+    populateApiaryFieldSelect();
     document.getElementById('add-field-modal').classList.add('hidden');
     e.target.reset();
     refreshAll();
@@ -750,6 +856,67 @@ function bindEvents() {
     switchTab('gis');
     gisMap.focusPoint(cLat, cLon, 13);
     showToast(`Заявка «${newField.name}» добавлена на карту и биржу!`);
+  });
+
+  // Форма добавления/редактирования пасеки
+  ['ap-lat', 'ap-lon'].forEach((id) => {
+    document.getElementById(id).addEventListener('input', () => {
+      updateApiarySafetyPreview(
+        document.getElementById('ap-lat').value,
+        document.getElementById('ap-lon').value
+      );
+    });
+  });
+
+  document.getElementById('btn-delete-apiary-modal').addEventListener('click', () => {
+    const id = document.getElementById('ap-id').value;
+    if (id) deleteApiaryById(id);
+  });
+
+  document.getElementById('apiary-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const existingId = document.getElementById('ap-id').value;
+    const lat = Number(Number(document.getElementById('ap-lat').value).toFixed(5));
+    const lon = Number(Number(document.getElementById('ap-lon').value).toFixed(5));
+    const hivesCount = Math.max(1, Number(document.getElementById('ap-hives').value));
+    const trailerType = document.getElementById('ap-trailer').value.trim();
+    const payload = {
+      name: document.getElementById('ap-name').value.trim(),
+      beekeeper: document.getElementById('ap-beekeeper').value.trim(),
+      phone: document.getElementById('ap-phone').value.trim(),
+      vetPassport: document.getElementById('ap-vet').value.trim(),
+      type: trailerType.toLowerCase().includes('стационар') ? 'stationary' : 'nomadic',
+      trailerType,
+      hivesCount,
+      lat,
+      lon,
+      assignedFieldId: document.getElementById('ap-field').value || null,
+    };
+
+    if (existingId) {
+      const idx = state.apiaries.findIndex((a) => a.id === existingId);
+      if (idx !== -1) {
+        state.apiaries[idx] = { ...state.apiaries[idx], ...payload };
+      }
+      showToast(`✅ Данные пасеки «${payload.name}» (${hivesCount} ульев) обновлены!`);
+    } else {
+      state.apiaries.push({
+        id: `api-${Date.now()}`,
+        ...payload,
+      });
+      const nearestHazard = state.treatments.find((tr) => haversineKm(lat, lon, tr.lat, tr.lon) <= 7.0);
+      if (nearestHazard) {
+        showToast(
+          `⚠️ Точок «${payload.name}» поставлен, но попадает в 7-км зону ФГИС «Сатурн» ${nearestHazard.saturnNumber}!`
+        );
+      } else {
+        showToast(`✅ Кочевой точок «${payload.name}» (${hivesCount} ульев) поставлен! Радиус 2 км пересчитан.`);
+      }
+    }
+
+    document.getElementById('apiary-modal').classList.add('hidden');
+    refreshAll();
+    gisMap?.focusPoint(lat, lon, 13);
   });
 
   // Кнопки паспорта
@@ -768,38 +935,35 @@ function bootstrap() {
     onOpenInCalculator: openFieldInCalculator,
     onOpenPassport: openPassportModal,
     onPlaceApiary: (lat, lon) => {
-      const idx = state.apiaries.length + 1;
-      const newApiary = {
-        id: `api-${Date.now()}`,
-        name: `Новый кочевой точок №${idx}`,
-        beekeeper: 'Дежурный пасечник кластера',
-        phone: '+7 (915) 440-22-18',
-        vetPassport: `ВП-57-0881${idx}`,
-        type: 'nomadic',
-        trailerType: 'Кочевая платформа (60 ульев)',
-        hivesCount: 60,
-        lat: Number(lat.toFixed(5)),
-        lon: Number(lon.toFixed(5)),
-        assignedFieldId: null,
-      };
-      state.apiaries.push(newApiary);
-
-      // Проверяем, не попал ли точок сразу под обработку ФГИС «Сатурн»
-      const nearestHazard = state.treatments.find((tr) => haversineKm(lat, lon, tr.lat, tr.lon) <= 7.0);
       document.getElementById('placement-banner').classList.add('hidden');
       gisMap.setPlacementMode(false);
+      openApiaryModal({ lat, lon });
+    },
+    onEditApiary: (apiaryId) => {
+      const apiary = state.apiaries.find((a) => a.id === apiaryId);
+      if (apiary) openApiaryModal({ apiary });
+    },
+    onDeleteApiary: (apiaryId) => {
+      deleteApiaryById(apiaryId);
+    },
+    onMoveApiary: (apiaryId, lat, lon) => {
+      const apiary = state.apiaries.find((a) => a.id === apiaryId);
+      if (!apiary) return;
+      apiary.lat = Number(lat.toFixed(5));
+      apiary.lon = Number(lon.toFixed(5));
       refreshAll();
-
-      if (nearestHazard) {
-        showToast(`⚠️ Точок поставлен, но он попал в 7-км зону обработки ФГИС «Сатурн» ${nearestHazard.saturnNumber}!`);
+      const hazard = state.treatments.find((tr) => haversineKm(apiary.lat, apiary.lon, tr.lat, tr.lon) <= 7.0);
+      if (hazard) {
+        showToast(`⚠️ «${apiary.name}» перемещена в 7-км зону обработки ${hazard.saturnNumber}!`);
       } else {
-        showToast(`✅ Кочевой точок №${idx} (60 ульев) поставлен! Радиусы 2 км и покрытие полей пересчитаны.`);
+        showToast(`📍 Позиция «${apiary.name}» обновлена — радиусы 2 км пересчитаны.`);
       }
     },
   });
 
   gisMap.init();
   initCalculatorControls();
+  populateApiaryFieldSelect();
   bindEvents();
   updateMeteoPanel();
   refreshAll();

@@ -91,9 +91,6 @@
         <button class="view-tab" data-tab="exchange" type="button">
           🤝 Биржа контрактов <span class="tab-count" id="tab-lots-count">0</span>
         </button>
-        <button class="view-tab" data-tab="about" type="button">
-          🛡️ Отличие от bee-saturn.ru
-        </button>
       </div>
 
       <div class="role-banner" id="role-banner">
@@ -139,6 +136,43 @@
 
           <div id="gis-map"></div>
 
+          <!-- Компактный док ветрового шлейфа и агрометео прямо под картой (для ПК и телефона без прокрутки) -->
+          <div class="map-wind-dock">
+            <div class="wind-dock-head">
+              <div class="wind-dock-title">
+                <span>💨 Симулятор ветра и агрометео (Open-Meteo)</span>
+                <span class="status-pill safe" id="meteo-source-badge">Загрузка...</span>
+              </div>
+              <div class="wind-dock-metrics">
+                <span class="meteo-chip">🌡️ <strong id="meteo-temp">-- °C</strong></span>
+                <span class="meteo-chip">💧 <strong id="meteo-humidity">-- %</strong></span>
+                <span class="meteo-chip">ΔT: <strong id="meteo-delta-t">-- °C</strong></span>
+              </div>
+            </div>
+
+            <div class="wind-sliders-grid">
+              <div class="slider-row">
+                <div class="slider-row-head">
+                  <span>Направление сноса</span>
+                  <span id="wind-dir-label">135° (ЮВ)</span>
+                </div>
+                <input type="range" id="wind-dir-slider" min="0" max="355" step="5" value="135" />
+              </div>
+              <div class="slider-row">
+                <div class="slider-row-head">
+                  <span>Скорость ветра</span>
+                  <span id="wind-speed-label">4.2 м/с</span>
+                </div>
+                <input type="range" id="wind-speed-slider" min="0" max="12" step="0.5" value="4.2" />
+              </div>
+            </div>
+
+            <div class="wind-dock-statuses">
+              <div id="meteo-flight-status"></div>
+              <div id="meteo-spray-status"></div>
+            </div>
+          </div>
+
           <div class="map-legend">
             <span class="legend-item"><span class="dot green"></span> Поле опылено (&ge; 80%)</span>
             <span class="legend-item"><span class="dot amber"></span> Дефицит пчелосемей (&lt; 80%)</span>
@@ -147,59 +181,12 @@
         </div>
 
         <aside class="gis-sidebar">
-          <!-- Виджет погоды и симулятор ветра -->
-          <div class="panel-card">
-            <div class="panel-card-header">
-              <h3 class="panel-card-title">🌤️ Агрометео и снос СЗР (Open-Meteo)</h3>
-              <span class="status-pill safe" id="meteo-source-badge">Загрузка...</span>
-            </div>
-            <div class="meteo-widget">
-              <div class="meteo-grid">
-                <div class="meteo-stat">
-                  <div class="meteo-stat-val" id="meteo-temp">-- °C</div>
-                  <div class="meteo-stat-lbl">Температура</div>
-                </div>
-                <div class="meteo-stat">
-                  <div class="meteo-stat-val" id="meteo-humidity">-- %</div>
-                  <div class="meteo-stat-lbl">Влажность</div>
-                </div>
-                <div class="meteo-stat">
-                  <div class="meteo-stat-val" id="meteo-delta-t">-- °C</div>
-                  <div class="meteo-stat-lbl">Индекс ΔT</div>
-                </div>
-              </div>
-
-              <div id="meteo-flight-status" style="font-size:0.83rem; margin-bottom:8px;"></div>
-              <div id="meteo-spray-status" style="font-size:0.83rem;"></div>
-
-              <div class="wind-sim-box">
-                <div style="font-size:0.78rem; font-weight:700; color:var(--text-muted); margin-bottom:8px;">
-                  💨 Симулятор ветрового шлейфа пестицидов (для оценки сноса):
-                </div>
-                <div class="slider-row">
-                  <div class="slider-row-head">
-                    <span>Направление ветра (куда дует шлейф)</span>
-                    <span id="wind-dir-label">135° (ЮВ)</span>
-                  </div>
-                  <input type="range" id="wind-dir-slider" min="0" max="355" step="5" value="135" />
-                </div>
-                <div class="slider-row">
-                  <div class="slider-row-head">
-                    <span>Скорость ветра</span>
-                    <span id="wind-speed-label">4.2 м/с</span>
-                  </div>
-                  <input type="range" id="wind-speed-slider" min="0" max="12" step="0.5" value="4.2" />
-                </div>
-              </div>
-            </div>
-          </div>
-
           <!-- Пространственный анализ полей и угроз -->
-          <div class="panel-card">
+          <div class="panel-card" style="height: 100%;">
             <div class="panel-card-header">
               <h3 class="panel-card-title">📊 Анализ покрытия и конфликтов</h3>
             </div>
-            <div class="spatial-list" id="spatial-analysis-list"></div>
+            <div class="spatial-list spatial-list-tall" id="spatial-analysis-list"></div>
           </div>
         </aside>
       </div>
@@ -348,56 +335,91 @@
       <div class="contracts-grid" id="contracts-grid"></div>
     </section>
 
-    <!-- ВКЛАДКА 4: ОТЛИЧИЕ ОТ BEE-SATURN.RU -->
-    <section class="view-panel" id="panel-about">
-      <div class="panel-card" style="padding: 20px;">
-        <h3 style="margin-top:0;">🛡️ Зачем АПК нужен «АпиКонтракт», если уже есть государственный портал bee-saturn.ru?</h3>
-        <p style="color: var(--text-muted); margin-bottom: 18px;">
-          Подсистема Россельхознадзора <strong>«Портал пчеловода» (bee-saturn.ru)</strong> — это важная витрина отчётности ФГИС «Сатурн»,
-          которая работает как односторонняя доска объявлений о применении пестицидов. <strong>«АпиКонтракт»</strong> не заменяет её, а использует данные ФГИС «Сатурн» как слой безопасности для решения <strong>экономической и логистической задачи</strong>, которую госреестр не закрывает.
-        </p>
-
-        <div class="comparison-table-wrap">
-          <table class="comparison-table">
-            <thead>
-              <tr>
-                <th>Критерий сравнения</th>
-                <th>ФГИС «Сатурн» / bee-saturn.ru</th>
-                <th>Платформа «АпиКонтракт»</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><strong>Главная задача</strong></td>
-                <td>Контроль списания и оборота пестицидов (постфактум-учёт и уведомление по закону)</td>
-                <td>Повышение урожайности АПК на 20–42% за счёт управляемого опыления + превентивная координация кочёвки</td>
-              </tr>
-              <tr>
-                <td><strong>Отображение кочевых пасек на карте</strong></td>
-                <td>❌ Отсутствует — агроном не видит, где вокруг его поля вчера встали кочевые прицепы с пчёлами</td>
-                <td>✅ Есть координаты точков, число ульев, ветпаспорт и радиус продуктивного лёта 2 км</td>
-              </tr>
-              <tr>
-                <td><strong>Учёт ветрового сноса аэрозоля и ΔT</strong></td>
-                <td>❌ Закрашивает только статичный кадастровый контур с календарным окном</td>
-                <td>✅ Подгружает ветер из метео-API, строит сектор ветрового шлейфа и считает индекс ΔT для капель</td>
-              </tr>
-              <tr>
-                <td><strong>Агроэкономика и медовый баланс</strong></td>
-                <td>❌ Не рассчитывает ни прибавку урожая, ни нектарную ёмкость массива</td>
-                <td>✅ Двусторонний калькулятор: норма пчелосемей/га, ROI агронома и товарный мёд без перегрузки поля</td>
-              </tr>
-              <tr>
-                <td><strong>Юридический документ сделки</strong></td>
-                <td>❌ Только публичное сообщение-уведомление об обработке</td>
-                <td>✅ Готовый <strong>Паспорт-договор кочёвки</strong> с QR-кодом, координатами ночного заезда и проверкой 7-км зоны</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
   </main>
+
+  <!-- МОДАЛЬНОЕ ОКНО: ДОБАВЛЕНИЕ И РЕДАКТИРОВАНИЕ ПАСЕКИ / ПРИЦЕПА -->
+  <div class="modal-backdrop hidden" id="apiary-modal" role="dialog" aria-modal="true" aria-labelledby="apiary-modal-title">
+    <div class="modal-dialog" style="max-width: 560px;">
+      <div class="modal-header">
+        <h3 style="margin:0;" id="apiary-modal-title">🐝 Параметры кочевого прицепа / пасеки</h3>
+        <button class="modal-close" data-close-modal="apiary-modal" type="button">✕</button>
+      </div>
+      <form id="apiary-form">
+        <input type="hidden" id="ap-id" value="" />
+        <div class="modal-body form-grid">
+          <div class="field-group">
+            <label for="ap-name">Название пасеки / точка</label>
+            <input type="text" id="ap-name" required placeholder="Например: Кочевая пасека №6 «Медовый Спас»" />
+          </div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div class="field-group">
+              <label for="ap-beekeeper">ФИО пчеловода</label>
+              <input type="text" id="ap-beekeeper" required placeholder="Соколов И.В." />
+            </div>
+            <div class="field-group">
+              <label for="ap-hives">Количество пчелосемей (ульев)</label>
+              <input type="number" id="ap-hives" min="1" max="500" value="60" required />
+            </div>
+          </div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div class="field-group">
+              <label for="ap-trailer">Транспорт и тип ульев</label>
+              <input
+                type="text"
+                id="ap-trailer"
+                list="ap-trailer-options"
+                required
+                value="Кочевой прицеп-павильон (Дадан)"
+              />
+              <datalist id="ap-trailer-options">
+                <option value="Кочевой прицеп-павильон (Дадан)"></option>
+                <option value="Платформа КАМАЗ + прицеп (Рут)"></option>
+                <option value="Мобильный павильон ГАЗон Next"></option>
+                <option value="Стационарный точок"></option>
+              </datalist>
+            </div>
+            <div class="field-group">
+              <label for="ap-field">Привязка к полю</label>
+              <select id="ap-field"></select>
+            </div>
+          </div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div class="field-group">
+              <label for="ap-vet">Ветеринарный паспорт</label>
+              <input type="text" id="ap-vet" required placeholder="ВП-57-08816" />
+            </div>
+            <div class="field-group">
+              <label for="ap-phone">Телефон пчеловода</label>
+              <input type="text" id="ap-phone" required placeholder="+7 (915) 440-22-18" />
+            </div>
+          </div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div class="field-group">
+              <label for="ap-lat">Широта (Lat)</label>
+              <input type="number" id="ap-lat" step="0.0001" required />
+            </div>
+            <div class="field-group">
+              <label for="ap-lon">Долгота (Lon)</label>
+              <input type="number" id="ap-lon" step="0.0001" required />
+            </div>
+          </div>
+
+          <div id="ap-safety-preview" style="font-size:0.83rem;"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-danger-outline hidden" id="btn-delete-apiary-modal" type="button" style="margin-right:auto;">
+            🗑️ Удалить пасеку
+          </button>
+          <button class="btn btn-outline" data-close-modal="apiary-modal" type="button">Отмена</button>
+          <button class="btn btn-amber" type="submit" id="btn-save-apiary">Сохранить на карте</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <!-- МОДАЛЬНОЕ ОКНО: ДОБАВЛЕНИЕ ПОЛЯ -->
   <div class="modal-backdrop hidden" id="add-field-modal" role="dialog" aria-modal="true" aria-labelledby="add-field-title">
