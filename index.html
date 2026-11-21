@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>АпиКонтракт — Координация кочевого пчеловодства и контрактного опыления в АПК</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+  <link rel="stylesheet" href="./css/styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand-block">
+        <div class="brand-logo" aria-hidden="true">🐝</div>
+        <div>
+          <div class="brand-title-row">
+            <h1 class="brand-name">АпиКонтракт</h1>
+            <span class="brand-badge">AgTech • ФГИС-слой</span>
+          </div>
+          <p class="brand-subtitle">
+            Геосервис контрактного опыления энтомофильных культур и защиты кочевых пасек (Орловский кластер)
+          </p>
+        </div>
+      </div>
+
+      <div class="role-switcher" role="group" aria-label="Режим работы">
+        <button class="role-btn active" data-role="dispatcher" type="button">🛰️ Диспетчер АПК</button>
+        <button class="role-btn" data-role="agronomist" type="button">🌾 Агроном</button>
+        <button class="role-btn" data-role="beekeeper" type="button">🍯 Пчеловод</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-container">
+    <!-- Верхняя сводка KPI -->
+    <section class="kpi-strip" aria-label="Ключевые показатели кластера">
+      <div class="kpi-card">
+        <div>
+          <div class="kpi-label">Площадь цветущих полей</div>
+          <div class="kpi-value" id="kpi-total-ha">0 га</div>
+          <div class="kpi-note" id="kpi-fields-count">0 активных полей</div>
+        </div>
+        <div class="kpi-icon emerald">🌱</div>
+      </div>
+
+      <div class="kpi-card">
+        <div>
+          <div class="kpi-label">Покрытие пчелосемьями</div>
+          <div class="kpi-value" id="kpi-coverage">0%</div>
+          <div class="kpi-note" id="kpi-hives-ratio">0 / 0 семей в зоне 2 км</div>
+        </div>
+        <div class="kpi-icon amber">🐝</div>
+      </div>
+
+      <div class="kpi-card">
+        <div>
+          <div class="kpi-label">Потенциал прибавки урожая</div>
+          <div class="kpi-value" id="kpi-yield-money">0 ₽</div>
+          <div class="kpi-note">Прогноз прироста от опыления</div>
+        </div>
+        <div class="kpi-icon sky">📈</div>
+      </div>
+
+      <div class="kpi-card">
+        <div>
+          <div class="kpi-label">Угрозы ФГИС «Сатурн» (7 км)</div>
+          <div class="kpi-value" id="kpi-hazards">0</div>
+          <div class="kpi-note" id="kpi-hazards-note">Сверка химобработок и сноса</div>
+        </div>
+        <div class="kpi-icon crimson">⚠️</div>
+      </div>
+    </section>
+
+    <!-- Навигация по разделам -->
+    <nav class="view-nav" aria-label="Разделы платформы">
+      <div class="view-tabs">
+        <button class="view-tab active" data-tab="gis" type="button">
+          🗺️ ГИС-Радар опыления и ФГИС «Сатурн»
+        </button>
+        <button class="view-tab" data-tab="calculator" type="button">
+          🧮 Двусторонний агрокалькулятор
+        </button>
+        <button class="view-tab" data-tab="exchange" type="button">
+          🤝 Биржа контрактов <span class="tab-count" id="tab-lots-count">0</span>
+        </button>
+        <button class="view-tab" data-tab="about" type="button">
+          🛡️ Отличие от bee-saturn.ru
+        </button>
+      </div>
+
+      <div class="role-banner" id="role-banner">
+        <span>🛰️</span>
+        <span id="role-banner-text">Режим диспетчера: видны все поля, кочевые прицепы и 7-км зоны СЗР.</span>
+      </div>
+    </nav>
+
+    <!-- ВКЛАДКА 1: ГИС-КАРТА -->
+    <section class="view-panel active" id="panel-gis">
+      <div class="gis-grid">
+        <div class="panel-card">
+          <div class="map-toolbar">
+            <div class="layer-toggles">
+              <label class="toggle-chip">
+                <input type="checkbox" id="layer-flight" checked />
+                <span class="dot green"></span> Лёт пчёл (2 км)
+              </label>
+              <label class="toggle-chip">
+                <input type="checkbox" id="layer-saturn" checked />
+                <span class="dot red"></span> Зоны ФГИС «Сатурн» (7 км)
+              </label>
+              <label class="toggle-chip">
+                <input type="checkbox" id="layer-plume" checked />
+                <span class="dot amber"></span> Ветровой шлейф
+              </label>
+            </div>
+
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="btn btn-amber btn-sm" id="btn-place-apiary" type="button">
+                📍 Поставить кочевой прицеп на карту
+              </button>
+              <button class="btn btn-outline btn-sm" id="btn-open-add-field" type="button">
+                ➕ Добавить поле
+              </button>
+            </div>
+          </div>
+
+          <div class="placement-banner hidden" id="placement-banner">
+            <span>🎯 Режим расстановки: кликните в любую точку карты (желательно в лесополосу у края поля), чтобы поставить кочевой прицеп и пересчитать покрытие 2 км и риск 7 км.</span>
+            <button class="btn btn-outline btn-sm" id="btn-cancel-placement" type="button">Отмена</button>
+          </div>
+
+          <div id="gis-map"></div>
+
+          <div class="map-legend">
+            <span class="legend-item"><span class="dot green"></span> Поле опылено (&ge; 80%)</span>
+            <span class="legend-item"><span class="dot amber"></span> Дефицит пчелосемей (&lt; 80%)</span>
+            <span class="legend-item"><span class="dot red"></span> Риск химобработки (ФЗ-490, 7 км + ветер)</span>
+          </div>
+        </div>
+
+        <aside class="gis-sidebar">
+          <!-- Виджет погоды и симулятор ветра -->
+          <div class="panel-card">
+            <div class="panel-card-header">
+              <h3 class="panel-card-title">🌤️ Агрометео и снос СЗР (Open-Meteo)</h3>
+              <span class="status-pill safe" id="meteo-source-badge">Загрузка...</span>
+            </div>
+            <div class="meteo-widget">
+              <div class="meteo-grid">
+                <div class="meteo-stat">
+                  <div class="meteo-stat-val" id="meteo-temp">-- °C</div>
+                  <div class="meteo-stat-lbl">Температура</div>
+                </div>
+                <div class="meteo-stat">
+                  <div class="meteo-stat-val" id="meteo-humidity">-- %</div>
+                  <div class="meteo-stat-lbl">Влажность</div>
+                </div>
+                <div class="meteo-stat">
+                  <div class="meteo-stat-val" id="meteo-delta-t">-- °C</div>
+                  <div class="meteo-stat-lbl">Индекс ΔT</div>
+                </div>
+              </div>
+
+              <div id="meteo-flight-status" style="font-size:0.83rem; margin-bottom:8px;"></div>
+              <div id="meteo-spray-status" style="font-size:0.83rem;"></div>
+
+              <div class="wind-sim-box">
+                <div style="font-size:0.78rem; font-weight:700; color:var(--text-muted); margin-bottom:8px;">
+                  💨 Симулятор ветрового шлейфа пестицидов (для оценки сноса):
+                </div>
+                <div class="slider-row">
+                  <div class="slider-row-head">
+                    <span>Направление ветра (куда дует шлейф)</span>
+                    <span id="wind-dir-label">135° (ЮВ)</span>
+                  </div>
+                  <input type="range" id="wind-dir-slider" min="0" max="355" step="5" value="135" />
+                </div>
+                <div class="slider-row">
+                  <div class="slider-row-head">
+                    <span>Скорость ветра</span>
+                    <span id="wind-speed-label">4.2 м/с</span>
+                  </div>
+                  <input type="range" id="wind-speed-slider" min="0" max="12" step="0.5" value="4.2" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Пространственный анализ полей и угроз -->
+          <div class="panel-card">
+            <div class="panel-card-header">
+              <h3 class="panel-card-title">📊 Анализ покрытия и конфликтов</h3>
+            </div>
+            <div class="spatial-list" id="spatial-analysis-list"></div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ВКЛАДКА 2: ДВУСТОРОННИЙ АГРОКАЛЬКУЛЯТОР -->
+    <section class="view-panel" id="panel-calculator">
+      <div class="calc-layout">
+        <div class="panel-card">
+          <div class="panel-card-header">
+            <h3 class="panel-card-title">⚙️ Параметры поля и контракта</h3>
+            <button class="btn btn-outline btn-sm" id="btn-calc-reset" type="button">Сброс по норме</button>
+          </div>
+          <div class="form-grid">
+            <div class="field-group">
+              <label for="calc-crop">Сельхозкультура (нормы Минсельхоза)</label>
+              <select id="calc-crop"></select>
+            </div>
+
+            <div class="field-group">
+              <label for="calc-area">
+                <span>Площадь поля</span>
+                <strong id="calc-area-val">120 га</strong>
+              </label>
+              <input type="range" id="calc-area" min="10" max="500" step="5" value="120" />
+            </div>
+
+            <div class="field-group">
+              <label for="calc-hives">
+                <span>Количество пчелосемей по контракту</span>
+                <strong id="calc-hives-val">180 семей</strong>
+              </label>
+              <input type="range" id="calc-hives" min="10" max="900" step="5" value="180" />
+            </div>
+
+            <div class="field-group">
+              <label for="calc-base-yield">Базовая урожайность без пчёл (т/га)</label>
+              <input type="number" id="calc-base-yield" step="0.1" min="0.2" max="60" value="2.4" />
+            </div>
+
+            <div class="field-group">
+              <label for="calc-crop-price">Рыночная цена урожая (₽ за тонну)</label>
+              <input type="number" id="calc-crop-price" step="500" min="5000" value="32000" />
+            </div>
+
+            <div class="field-group">
+              <label for="calc-fee">Оплата опыления за 1 пчелосемью (₽)</label>
+              <input type="number" id="calc-fee" step="100" min="0" value="2500" />
+            </div>
+
+            <div class="field-group">
+              <label for="calc-honey-price">Оптовая цена товарного мёда (₽/кг)</label>
+              <input type="number" id="calc-honey-price" step="10" min="80" value="240" />
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-card" style="padding: 18px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:14px;">
+            <h3 style="margin:0;">📈 Экономический эффект Win-Win (Агроном ↔ Пасечник)</h3>
+            <span class="status-pill safe" id="calc-saturation-badge">Насыщение: 100%</span>
+          </div>
+
+          <div class="dual-results-grid">
+            <div class="side-card agronomist">
+              <h4>🌾 Экономика сельхозпроизводителя</h4>
+              <div class="metric-row">
+                <span>Норматив пчелосемей на поле:</span>
+                <strong id="res-req-hives">180 семей</strong>
+              </div>
+              <div class="metric-row">
+                <span>Насыщенность опылением:</span>
+                <strong id="res-sat-pct">100%</strong>
+              </div>
+              <div class="metric-row">
+                <span>Прибавка урожая:</span>
+                <strong id="res-yield-gain">+80.6 т</strong>
+              </div>
+              <div class="metric-row">
+                <span>Валовая выручка от прибавки:</span>
+                <strong id="res-gross-gain">2 579 200 ₽</strong>
+              </div>
+              <div class="metric-row">
+                <span>Затраты на контракт опыления:</span>
+                <strong id="res-contract-cost">450 000 ₽</strong>
+              </div>
+              <div class="metric-highlight emerald">
+                <span>Чистая дополнительная прибыль хозяйства (ROI <span id="res-roi">473%</span>)</span>
+                <span class="big-num" id="res-agro-net">+2 129 200 ₽</span>
+              </div>
+            </div>
+
+            <div class="side-card beekeeper">
+              <h4>🍯 Экономика кочевой пасеки</h4>
+              <div class="metric-row">
+                <span>Биологический медовый запас поля:</span>
+                <strong id="res-nectar-pool">5 400 кг</strong>
+              </div>
+              <div class="metric-row">
+                <span>Прогноз сбора товарного мёда:</span>
+                <strong id="res-honey-total">2 268 кг</strong>
+              </div>
+              <div class="metric-row">
+                <span>Выход мёда на 1 пчелосемью:</span>
+                <strong id="res-honey-per-hive">12.6 кг/улей</strong>
+              </div>
+              <div class="metric-row">
+                <span>Выручка от реализации мёда:</span>
+                <strong id="res-honey-rev">544 320 ₽</strong>
+              </div>
+              <div class="metric-row">
+                <span>Оплата за услугу опыления:</span>
+                <strong id="res-fee-rev">450 000 ₽</strong>
+              </div>
+              <div class="metric-highlight amber">
+                <span>Совокупный доход пчеловода за сезон</span>
+                <span class="big-num" id="res-bee-total">+994 320 ₽</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="calc-advice-box" id="calc-advice-box"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ВКЛАДКА 3: БИРЖА КОНТРАКТОВ -->
+    <section class="view-panel" id="panel-exchange">
+      <div class="exchange-toolbar">
+        <div class="filter-row">
+          <select id="filter-crop">
+            <option value="all">Все культуры</option>
+          </select>
+          <select id="filter-status">
+            <option value="all">Все заявки</option>
+            <option value="deficit">Нужны пчёлы (дефицит)</option>
+            <option value="covered">Полностью укомплектованы</option>
+            <option value="safe-only">Только «пестицидная тишина»</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" id="btn-exchange-add-field" type="button">
+          ➕ Разместить заявку поля на опыление
+        </button>
+      </div>
+
+      <div class="contracts-grid" id="contracts-grid"></div>
+    </section>
+
+    <!-- ВКЛАДКА 4: ОТЛИЧИЕ ОТ BEE-SATURN.RU -->
+    <section class="view-panel" id="panel-about">
+      <div class="panel-card" style="padding: 20px;">
+        <h3 style="margin-top:0;">🛡️ Зачем АПК нужен «АпиКонтракт», если уже есть государственный портал bee-saturn.ru?</h3>
+        <p style="color: var(--text-muted); margin-bottom: 18px;">
+          Подсистема Россельхознадзора <strong>«Портал пчеловода» (bee-saturn.ru)</strong> — это важная витрина отчётности ФГИС «Сатурн»,
+          которая работает как односторонняя доска объявлений о применении пестицидов. <strong>«АпиКонтракт»</strong> не заменяет её, а использует данные ФГИС «Сатурн» как слой безопасности для решения <strong>экономической и логистической задачи</strong>, которую госреестр не закрывает.
+        </p>
+
+        <div class="comparison-table-wrap">
+          <table class="comparison-table">
+            <thead>
+              <tr>
+                <th>Критерий сравнения</th>
+                <th>ФГИС «Сатурн» / bee-saturn.ru</th>
+                <th>Платформа «АпиКонтракт»</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Главная задача</strong></td>
+                <td>Контроль списания и оборота пестицидов (постфактум-учёт и уведомление по закону)</td>
+                <td>Повышение урожайности АПК на 20–42% за счёт управляемого опыления + превентивная координация кочёвки</td>
+              </tr>
+              <tr>
+                <td><strong>Отображение кочевых пасек на карте</strong></td>
+                <td>❌ Отсутствует — агроном не видит, где вокруг его поля вчера встали кочевые прицепы с пчёлами</td>
+                <td>✅ Есть координаты точков, число ульев, ветпаспорт и радиус продуктивного лёта 2 км</td>
+              </tr>
+              <tr>
+                <td><strong>Учёт ветрового сноса аэрозоля и ΔT</strong></td>
+                <td>❌ Закрашивает только статичный кадастровый контур с календарным окном</td>
+                <td>✅ Подгружает ветер из метео-API, строит сектор ветрового шлейфа и считает индекс ΔT для капель</td>
+              </tr>
+              <tr>
+                <td><strong>Агроэкономика и медовый баланс</strong></td>
+                <td>❌ Не рассчитывает ни прибавку урожая, ни нектарную ёмкость массива</td>
+                <td>✅ Двусторонний калькулятор: норма пчелосемей/га, ROI агронома и товарный мёд без перегрузки поля</td>
+              </tr>
+              <tr>
+                <td><strong>Юридический документ сделки</strong></td>
+                <td>❌ Только публичное сообщение-уведомление об обработке</td>
+                <td>✅ Готовый <strong>Паспорт-договор кочёвки</strong> с QR-кодом, координатами ночного заезда и проверкой 7-км зоны</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- МОДАЛЬНОЕ ОКНО: ДОБАВЛЕНИЕ ПОЛЯ -->
+  <div class="modal-backdrop hidden" id="add-field-modal" role="dialog" aria-modal="true" aria-labelledby="add-field-title">
+    <div class="modal-dialog" style="max-width: 540px;">
+      <div class="modal-header">
+        <h3 style="margin:0;" id="add-field-title">🌾 Новая заявка поля на опыление</h3>
+        <button class="modal-close" data-close-modal="add-field-modal" type="button">✕</button>
+      </div>
+      <form id="add-field-form">
+        <div class="modal-body form-grid">
+          <div class="field-group">
+            <label for="nf-name">Название поля / участка</label>
+            <input type="text" id="nf-name" required placeholder="Например: Поле №31 «Южный склон»" />
+          </div>
+          <div class="field-group">
+            <label for="nf-farm">Хозяйство / КФХ</label>
+            <input type="text" id="nf-farm" required placeholder="ООО «Рассвет-Агро»" />
+          </div>
+          <div class="field-group">
+            <label for="nf-cadastral">Кадастровый номер (для сверки с ФГИС «Сатурн»)</label>
+            <input type="text" id="nf-cadastral" required value="57:19:0040911:105" />
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div class="field-group">
+              <label for="nf-crop">Культура</label>
+              <select id="nf-crop"></select>
+            </div>
+            <div class="field-group">
+              <label for="nf-area">Площадь (га)</label>
+              <input type="number" id="nf-area" min="5" max="1000" value="85" required />
+            </div>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div class="field-group">
+              <label for="nf-fee">Ставка за семью (₽)</label>
+              <input type="number" id="nf-fee" min="0" step="100" value="2400" required />
+            </div>
+            <div class="field-group">
+              <label for="nf-agronomist">Агроном / контакт</label>
+              <input type="text" id="nf-agronomist" required value="Иванов П.С." />
+            </div>
+          </div>
+          <label style="display:flex; align-items:center; gap:8px; font-size:0.85rem; cursor:pointer;">
+            <input type="checkbox" id="nf-silence" checked />
+            Гарантия «пестицидной тишины» (запрет СЗР 1–2 класса на весь период цветения)
+          </label>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" data-close-modal="add-field-modal" type="button">Отмена</button>
+          <button class="btn btn-primary" type="submit">Разместить поле на карте и бирже</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- МОДАЛЬНОЕ ОКНО: ПАСПОРТ-ДОГОВОР КОЧЁВКИ С QR-КОДОМ -->
+  <div class="modal-backdrop hidden" id="passport-modal" role="dialog" aria-modal="true" aria-labelledby="passport-title">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 style="margin:0;" id="passport-title">📄 Паспорт-договор кочёвки и опыления</h3>
+        <button class="modal-close" data-close-modal="passport-modal" type="button">✕</button>
+      </div>
+      <div class="modal-body" id="passport-content"></div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" data-close-modal="passport-modal" type="button">Закрыть</button>
+        <button class="btn btn-amber" id="btn-print-passport" type="button">🖨️ Распечатать / Сохранить PDF</button>
+        <button class="btn btn-emerald" id="btn-confirm-contract" type="button">✅ Зафиксировать контракт на карте</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toast-container"></div>
+
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>
