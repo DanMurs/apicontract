@@ -4,7 +4,7 @@
  * и сектор ветрового сноса пестицидов.
  */
 
-import { CROPS_DB, PESTICIDE_CLASSES, CLUSTER_CENTER } from './data.js?v=11';
+import { CROPS_DB, PESTICIDE_CLASSES, CLUSTER_CENTER } from './data.js?v=12';
 
 const EARTH_RADIUS_KM = 6371;
 

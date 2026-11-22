@@ -255,10 +255,10 @@ export const INITIAL_FIELDS = [
     pesticideSilenceConfirmed: true,
     nightAccessRoad: 'Съезд у лесополосы №4, тень в полдень, доступ круглосуточно',
     polygon: [
-      [52.968, 37.392],
-      [52.978, 37.394],
-      [52.976, 37.413],
-      [52.966, 37.411],
+      [52.958, 37.355],
+      [52.968, 37.357],
+      [52.966, 37.376],
+      [52.956, 37.374],
     ],
   },
   {
@@ -310,8 +310,8 @@ export const INITIAL_APIARIES = [
     type: 'nomadic',
     trailerType: 'Мобильная платформа (90 ульев Рут)',
     hivesCount: 90,
-    lat: 52.954,
-    lon: 37.316,
+    lat: 52.956,
+    lon: 37.342,
     assignedFieldId: 'fld-2',
   },
   {
@@ -360,6 +360,26 @@ export const INITIAL_APIARIES = [
  * по Орловской области с реальными кадастровыми номерами, контурами и препаратами.
  */
 export const INITIAL_SATURN_TREATMENTS = [
+  {
+    id: 'sat-summer-412',
+    saturnNumber: 'SAT-57-412',
+    farm: 'ООО «АгроТех-Черноземье» (план-сезон)',
+    cadastral: '57:20:0030118:190',
+    crop: 'Пшеница яровая (110 га)',
+    pesticideName: 'Пиретроид Про (лямбда-цигалотрин, 0.15 л/га)',
+    hazardClass: 1,
+    startDate: '2026-06-20',
+    endDate: '2026-06-24',
+    dateWindow: '20.06.2026 — 24.06.2026 (22:00–04:00)',
+    lat: 52.904,
+    lon: 37.302,
+    polygon: [
+      [52.900, 37.293],
+      [52.908, 37.295],
+      [52.907, 37.311],
+      [52.899, 37.309],
+    ],
+  },
   {
     id: 'sat-real-1892602',
     saturnNumber: '1892602',
