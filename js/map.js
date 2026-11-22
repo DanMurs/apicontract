@@ -4,7 +4,7 @@
  * и сектор ветрового сноса пестицидов.
  */
 
-import { CROPS_DB, PESTICIDE_CLASSES, CLUSTER_CENTER } from './data.js?v=9';
+import { CROPS_DB, PESTICIDE_CLASSES, CLUSTER_CENTER } from './data.js?v=10';
 
 const EARTH_RADIUS_KM = 6371;
 
@@ -271,14 +271,14 @@ export class ApiGisMap {
       return;
     }
 
-    const regionBounds = window.L.latLngBounds([49.5, 31.0], [56.2, 43.0]);
+    const russiaBounds = window.L.latLngBounds([41.0, 19.0], [78.0, 179.5]);
 
     this.map = window.L.map(this.containerId, {
       center: [CLUSTER_CENTER.lat, CLUSTER_CENTER.lon],
       zoom: CLUSTER_CENTER.zoom,
-      minZoom: 7,
+      minZoom: 4,
       maxZoom: 18,
-      maxBounds: regionBounds,
+      maxBounds: russiaBounds,
       maxBoundsViscosity: 1.0,
       worldCopyJump: false,
     });
@@ -291,7 +291,7 @@ export class ApiGisMap {
     const osmLayer = window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 18,
       noWrap: true,
-      bounds: regionBounds,
+      bounds: russiaBounds,
       attribution: '&copy; OpenStreetMap | АпиКонтракт ГИС',
     });
 
@@ -300,7 +300,7 @@ export class ApiGisMap {
       {
         maxZoom: 18,
         noWrap: true,
-        bounds: regionBounds,
+        bounds: russiaBounds,
         attribution: 'Tiles &copy; Esri',
       }
     );
