@@ -4,9 +4,17 @@
  * и сектор ветрового сноса пестицидов.
  */
 
-import { CROPS_DB, PESTICIDE_CLASSES, CLUSTER_CENTER } from './data.js?v=10';
+import { CROPS_DB, PESTICIDE_CLASSES, CLUSTER_CENTER } from './data.js?v=11';
 
 const EARTH_RADIUS_KM = 6371;
+
+/**
+ * Проверяет, пересекаются ли два календарных интервала (формат YYYY-MM-DD).
+ */
+export function datesOverlap(startA, endA, startB, endB) {
+  if (!startA || !endA || !startB || !endB) return true;
+  return startA <= endB && startB <= endA;
+}
 
 export function toRad(deg) {
   return (deg * Math.PI) / 180;
@@ -149,9 +157,26 @@ function buildWindPlumePolygon(originLat, originLon, windDirDeg, windSpeedMs) {
 }
 
 /**
- * Пространственный анализ всех полей, пасек и угроз ФГИС «Сатурн».
+ * Пространственный анализ всех полей, пасек и угроз ФГИС «Сатурн»
+ * с учётом конкуренции за опылителей и календарного пересечения дат.
  */
 export function analyzeSpatialCoverage(fields, apiaries, treatments, windState) {
+  // Предрасчёт достижимости полей от каждой пасеки (радиус до 3.5 км)
+  const apiaryReachMap = new Map();
+  for (const apiary of apiaries) {
+    const reached = [];
+    for (const field of fields) {
+      const distKm = minDistToPolygonKm(apiary.lat, apiary.lon, field.polygon);
+      if (distKm <= 3.5) {
+        const crop = CROPS_DB[field.cropId];
+        const proximityWeight = distKm <= 2.0 ? 1.0 : 0.55;
+        const nectarPull = field.areaHa * (crop?.nectarKgHa || 50) * proximityWeight;
+        reached.push({ field, distKm, proximityWeight, nectarPull });
+      }
+    }
+    apiaryReachMap.set(apiary.id, reached);
+  }
+
   const fieldReports = fields.map((field) => {
     const crop = CROPS_DB[field.cropId];
     const [cLat, cLon] = polygonCentroid(field.polygon);
@@ -161,27 +186,44 @@ export function analyzeSpatialCoverage(fields, apiaries, treatments, windState) 
     const nearbyApiaries = [];
 
     for (const apiary of apiaries) {
-      const distKm = minDistToPolygonKm(apiary.lat, apiary.lon, field.polygon);
-      if (distKm <= 2.0) {
-        effectiveHives += apiary.hivesCount;
-        nearbyApiaries.push({ apiary, distKm, zone: 'productive', weight: 1.0 });
-      } else if (distKm <= 3.5) {
-        const contribution = Math.round(apiary.hivesCount * 0.55);
-        effectiveHives += contribution;
-        nearbyApiaries.push({ apiary, distKm, zone: 'extended', weight: 0.55 });
-      }
+      const reached = apiaryReachMap.get(apiary.id) || [];
+      const myMatch = reached.find((r) => r.field.id === field.id);
+      if (!myMatch) continue;
+
+      // Конкуренция: учитываем только одновременно цветущие поля в радиусе 3.5 км от этой пасеки
+      const overlapping = reached.filter((r) =>
+        datesOverlap(field.bloomStart, field.bloomEnd, r.field.bloomStart, r.field.bloomEnd)
+      );
+      const totalPull = overlapping.reduce((sum, r) => sum + r.nectarPull, 0);
+      const share = totalPull > 0 ? myMatch.nectarPull / totalPull : 1.0;
+
+      const allocatedHives = Math.round(apiary.hivesCount * myMatch.proximityWeight * share);
+      effectiveHives += allocatedHives;
+
+      nearbyApiaries.push({
+        apiary,
+        distKm: myMatch.distKm,
+        zone: myMatch.distKm <= 2.0 ? 'productive' : 'extended',
+        weight: myMatch.proximityWeight,
+        share,
+        competingFieldsCount: overlapping.length,
+        allocatedHives,
+      });
     }
 
     const coveragePct = requiredHives > 0 ? Math.min(100, Math.round((effectiveHives / requiredHives) * 100)) : 100;
     const deficitHives = Math.max(0, requiredHives - effectiveHives);
     const needsCounterPollination = field.areaHa >= 100 && nearbyApiaries.length <= 1;
+    const hasCompetition = nearbyApiaries.some((n) => n.competingFieldsCount > 1);
 
-    // Проверка пересечения с 7-км буферными зонами ФГИС «Сатурн»
+    // Календарная + пространственная проверка пересечения с 7-км зонами ФГИС «Сатурн»
     const saturnAlerts = [];
+    const nonOverlappingSaturn = [];
     for (const tr of treatments) {
       const pInfo = PESTICIDE_CLASSES[tr.hazardClass] || PESTICIDE_CLASSES[3];
       const distKm = haversineKm(cLat, cLon, tr.lat, tr.lon);
       if (distKm <= pInfo.bufferRadiusKm) {
+        const overlapsDates = datesOverlap(field.bloomStart, field.bloomEnd, tr.startDate, tr.endDate);
         const inPlume = isPointInWindPlume(
           cLat,
           cLon,
@@ -190,7 +232,11 @@ export function analyzeSpatialCoverage(fields, apiaries, treatments, windState) 
           windState.directionDeg,
           windState.speedMs
         );
-        saturnAlerts.push({ treatment: tr, distKm, inPlume, hazardClass: tr.hazardClass });
+        if (overlapsDates) {
+          saturnAlerts.push({ treatment: tr, distKm, inPlume, hazardClass: tr.hazardClass });
+        } else {
+          nonOverlappingSaturn.push({ treatment: tr, distKm });
+        }
       }
     }
 
@@ -204,12 +250,23 @@ export function analyzeSpatialCoverage(fields, apiaries, treatments, windState) 
       deficitHives,
       nearbyApiaries,
       needsCounterPollination,
+      hasCompetition,
       saturnAlerts,
+      nonOverlappingSaturn,
     };
   });
 
+  const fieldById = new Map(fields.map((f) => [f.id, f]));
+
   const apiaryReports = apiaries.map((apiary) => {
     const hazards = [];
+    // Стационарные и свободные пасеки проверяются на весь год; закреплённые кочевые — на период цветения поля
+    const assignedField = apiary.assignedFieldId ? fieldById.get(apiary.assignedFieldId) : null;
+    const activeStart =
+      apiary.type !== 'stationary' && assignedField ? assignedField.bloomStart : '0000-01-01';
+    const activeEnd =
+      apiary.type !== 'stationary' && assignedField ? assignedField.bloomEnd : '9999-12-31';
+
     for (const tr of treatments) {
       const pInfo = PESTICIDE_CLASSES[tr.hazardClass] || PESTICIDE_CLASSES[3];
       const distKm = haversineKm(apiary.lat, apiary.lon, tr.lat, tr.lon);
@@ -221,7 +278,9 @@ export function analyzeSpatialCoverage(fields, apiaries, treatments, windState) 
         windState.directionDeg,
         windState.speedMs
       );
-      if (distKm <= pInfo.bufferRadiusKm || inPlume) {
+      const overlapsDates = datesOverlap(activeStart, activeEnd, tr.startDate, tr.endDate);
+
+      if ((distKm <= pInfo.bufferRadiusKm || inPlume) && overlapsDates) {
         hazards.push({
           treatment: tr,
           distKm,
@@ -372,7 +431,17 @@ export class ApiGisMap {
 
     // 1. Поля для опыления
     for (const rep of analysis.fieldReports) {
-      const { field, crop, requiredHives, effectiveHives, coveragePct, saturnAlerts, needsCounterPollination } = rep;
+      const {
+        field,
+        crop,
+        requiredHives,
+        effectiveHives,
+        coveragePct,
+        saturnAlerts,
+        nonOverlappingSaturn,
+        hasCompetition,
+        needsCounterPollination,
+      } = rep;
       const isOptimal = coveragePct >= 80;
       const hasHazard = saturnAlerts.length > 0;
 
@@ -388,11 +457,19 @@ export class ApiGisMap {
 
       const alertHtml = hasHazard
         ? `<div style="margin-top:6px;padding:5px 7px;background:#fee2e2;color:#991b1b;border-radius:6px;font-size:12px;">
-            ⚠️ В 7-км зоне обработки ФГИС «Сатурн» (${saturnAlerts[0].treatment.saturnNumber}, ${saturnAlerts[0].distKm.toFixed(1)} км)
+            ⚠️ Конфликт по датам и 7-км зоне ФГИС «Сатурн» (№${saturnAlerts[0].treatment.saturnNumber}, ${saturnAlerts[0].distKm.toFixed(1)} км)
            </div>`
-        : `<div style="margin-top:6px;padding:5px 7px;background:#d1fae5;color:#065f46;border-radius:6px;font-size:12px;">
-            ✅ Пестицидная тишина подтверждена
-           </div>`;
+        : nonOverlappingSaturn.length > 0
+          ? `<div style="margin-top:6px;padding:5px 7px;background:#d1fae5;color:#065f46;border-radius:6px;font-size:12px;">
+              ✅ В 7 км есть СЗР №${nonOverlappingSaturn[0].treatment.saturnNumber} (${nonOverlappingSaturn[0].treatment.dateWindow}), но вне сроков цветения — безопасно
+             </div>`
+          : `<div style="margin-top:6px;padding:5px 7px;background:#d1fae5;color:#065f46;border-radius:6px;font-size:12px;">
+              ✅ Пестицидная тишина подтверждена
+             </div>`;
+
+      const compHtml = hasCompetition
+        ? `<div style="margin-top:4px;font-size:11px;color:#0369a1;">⚖️ Конкуренция опылителей: пасека делится между одновременно цветущими полями</div>`
+        : '';
 
       const counterHtml = needsCounterPollination
         ? `<div style="margin-top:4px;font-size:11px;color:#b45309;">💡 Рекомендуется второй точок на противоположном краю (встречное опыление)</div>`
@@ -404,11 +481,13 @@ export class ApiGisMap {
           <div style="font-size:12px;color:#526358;margin-bottom:8px;">${field.farm} • Кадастр: ${field.cadastral}</div>
           <div style="font-size:12.5px;line-height:1.5;">
             <b>Культура:</b> ${crop.name} (${field.areaHa} га)<br/>
+            <b>Цветение:</b> ${field.bloomStart} — ${field.bloomEnd}<br/>
             <b>Норматив:</b> ${requiredHives} пчелосемей<br/>
-            <b>В радиусе лёта:</b> ${effectiveHives} семей (<b>${coveragePct}%</b>)<br/>
+            <b>Долетает с учётом конкуренции:</b> ${effectiveHives} семей (<b>${coveragePct}%</b>)<br/>
             <b>Ставка:</b> ${field.feePerHiveRub.toLocaleString('ru-RU')} ₽ / улей
           </div>
           ${alertHtml}
+          ${compHtml}
           ${counterHtml}
           <div style="display:flex;gap:6px;margin-top:10px;">
             <button data-map-calc="${field.id}" style="flex:1;padding:6px 8px;border:none;border-radius:6px;background:#132a1e;color:#fff;font-size:12px;font-weight:600;cursor:pointer;">

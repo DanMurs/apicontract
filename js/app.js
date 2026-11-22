@@ -9,21 +9,22 @@ import {
   INITIAL_FIELDS,
   INITIAL_APIARIES,
   INITIAL_SATURN_TREATMENTS,
-} from './data.js?v=10';
+} from './data.js?v=11';
 import {
   ApiGisMap,
   analyzeSpatialCoverage,
   buildFieldPolygonFromCenter,
+  datesOverlap,
   polygonCentroid,
   haversineKm,
   isPointInWindPlume,
-} from './map.js?v=10';
+} from './map.js?v=11';
 import {
   calculateDualEconomics,
   evaluateMeteoConditions,
   fetchClusterWeather,
   formatWindDirection,
-} from './calculator.js?v=10';
+} from './calculator.js?v=11';
 
 const state = {
   activeTab: 'gis',
@@ -174,7 +175,17 @@ function renderSpatialSidebar(analysis) {
 
   // Далее — покрытие полей опылением
   for (const frep of analysis.fieldReports) {
-    const { field, crop, centroid, requiredHives, effectiveHives, coveragePct, saturnAlerts } = frep;
+    const {
+      field,
+      crop,
+      centroid,
+      requiredHives,
+      effectiveHives,
+      coveragePct,
+      saturnAlerts,
+      nonOverlappingSaturn,
+      hasCompetition,
+    } = frep;
     const isOptimal = coveragePct >= 80;
     const fillColor = isOptimal ? '#10b981' : '#f59e0b';
     const badgeClass = saturnAlerts.length > 0 ? 'danger' : isOptimal ? 'safe' : 'warn';
@@ -187,7 +198,9 @@ function renderSpatialSidebar(analysis) {
           <span class="status-pill ${badgeClass}">${badgeText}</span>
         </div>
         <div style="font-size:0.78rem;color:var(--text-muted);">
-          ${field.areaHa} га • нужно ${requiredHives} сем. • сейчас в 2 км: <b>${effectiveHives}</b>
+          ${field.areaHa} га • нужно ${requiredHives} сем. • долетает: <b>${effectiveHives}</b>
+          ${hasCompetition ? ' <span title="Конкуренция: пасека делится между цветущими полями">⚖️</span>' : ''}
+          ${saturnAlerts.length === 0 && nonOverlappingSaturn.length > 0 ? ' <span title="СЗР рядом вне сроков цветения">📅✓</span>' : ''}
         </div>
         <div class="progress-bar-wrap">
           <div class="progress-bar-fill" style="width:${coveragePct}%;background:${fillColor};"></div>
@@ -667,6 +680,13 @@ function updateApiarySafetyPreview(lat, lon) {
     return;
   }
 
+  const assignedFieldId = document.getElementById('ap-field')?.value;
+  const assignedField = assignedFieldId ? state.fields.find((f) => f.id === assignedFieldId) : null;
+  const trailerVal = document.getElementById('ap-trailer')?.value || '';
+  const isStationary = trailerVal.toLowerCase().includes('стационар');
+  const activeStart = !isStationary && assignedField ? assignedField.bloomStart : '0000-01-01';
+  const activeEnd = !isStationary && assignedField ? assignedField.bloomEnd : '9999-12-31';
+
   const hits = [];
   for (const tr of state.treatments) {
     const pInfo = PESTICIDE_CLASSES[tr.hazardClass] || PESTICIDE_CLASSES[3];
@@ -679,7 +699,7 @@ function updateApiarySafetyPreview(lat, lon) {
       state.wind.directionDeg,
       state.wind.speedMs
     );
-    if (distKm <= pInfo.bufferRadiusKm || inPlume) {
+    if ((distKm <= pInfo.bufferRadiusKm || inPlume) && datesOverlap(activeStart, activeEnd, tr.startDate, tr.endDate)) {
       hits.push({ tr, pInfo, distKm, inPlume });
     }
   }
@@ -870,8 +890,8 @@ function bindEvents() {
       cadastral: document.getElementById('nf-cadastral').value.trim(),
       cropId,
       areaHa,
-      bloomStart: '2026-06-12',
-      bloomEnd: '2026-07-05',
+      bloomStart: document.getElementById('nf-bloom-start').value || '2026-06-12',
+      bloomEnd: document.getElementById('nf-bloom-end').value || '2026-07-05',
       feePerHiveRub,
       pesticideSilenceConfirmed: document.getElementById('nf-silence').checked,
       nightAccessRoad: 'Полевой съезд с южной стороны лесополосы',
@@ -897,15 +917,20 @@ function bindEvents() {
     const hazardClass = Number(document.getElementById('tr-hazard').value);
     const num = Math.floor(100 + Math.random() * 899);
 
+    const startDate = document.getElementById('tr-start').value || '2026-06-18';
+    const endDate = document.getElementById('tr-end').value || '2026-06-22';
+
     const tr = {
       id: `sat-${Date.now()}`,
       saturnNumber: `SAT-57-${num}`,
       farm: document.getElementById('tr-farm').value.trim(),
-      cadastral: `57:19:0060102:${num}`,
+      cadastral: `57:20:0060102:${num}`,
       crop: 'Зерновые / технические культуры',
       pesticideName: document.getElementById('tr-pesticide').value.trim(),
       hazardClass,
-      dateWindow: 'Сегодня (22:00–04:00)',
+      startDate,
+      endDate,
+      dateWindow: `${startDate} — ${endDate} (22:00–04:00)`,
       lat,
       lon,
       polygon: buildFieldPolygonFromCenter(lat, lon, 110),
@@ -919,8 +944,9 @@ function bindEvents() {
   });
 
   // Форма добавления/редактирования пасеки
-  ['ap-lat', 'ap-lon'].forEach((id) => {
-    document.getElementById(id).addEventListener('input', () => {
+  ['ap-lat', 'ap-lon', 'ap-field', 'ap-trailer'].forEach((id) => {
+    const evt = id === 'ap-field' ? 'change' : 'input';
+    document.getElementById(id).addEventListener(evt, () => {
       updateApiarySafetyPreview(
         document.getElementById('ap-lat').value,
         document.getElementById('ap-lon').value
