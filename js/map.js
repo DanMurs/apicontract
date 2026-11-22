@@ -78,6 +78,27 @@ export function polygonCentroid(polygon) {
 }
 
 /**
+ * Строит прямоугольный контур поля вокруг (lat, lon) пропорционально площади в гектарах.
+ */
+export function buildFieldPolygonFromCenter(lat, lon, areaHa) {
+  const areaKm2 = Math.max(0.05, Number(areaHa) * 0.01);
+  // Пропорция сторон ~ 1.45 : 1
+  const heightKm = Math.sqrt(areaKm2 / 1.45);
+  const widthKm = areaKm2 / heightKm;
+
+  const dLat = (heightKm / 2) / 111.32;
+  const kmPerLonDeg = 111.32 * Math.max(0.2, Math.cos(toRad(lat)));
+  const dLon = (widthKm / 2) / kmPerLonDeg;
+
+  return [
+    [Number((lat - dLat).toFixed(5)), Number((lon - dLon).toFixed(5))],
+    [Number((lat + dLat).toFixed(5)), Number((lon - dLon + dLon * 0.08).toFixed(5))],
+    [Number((lat + dLat).toFixed(5)), Number((lon + dLon).toFixed(5))],
+    [Number((lat - dLat).toFixed(5)), Number((lon + dLon - dLon * 0.08).toFixed(5))],
+  ];
+}
+
+/**
  * Минимальное расстояние от точки до центра или вершин полигона (в км).
  */
 export function minDistToPolygonKm(lat, lon, polygon) {
@@ -241,7 +262,7 @@ export class ApiGisMap {
       saturn: true,
       plume: true,
     };
-    this.placementMode = false;
+    this.placementMode = null;
   }
 
   init() {
@@ -283,17 +304,17 @@ export class ApiGisMap {
     this.layers.apiaries = window.L.layerGroup().addTo(this.map);
 
     this.map.on('click', (e) => {
-      if (this.placementMode && typeof this.callbacks.onPlaceApiary === 'function') {
-        this.callbacks.onPlaceApiary(e.latlng.lat, e.latlng.lng);
+      if (this.placementMode && typeof this.callbacks.onMapTargetClick === 'function') {
+        this.callbacks.onMapTargetClick(this.placementMode, e.latlng.lat, e.latlng.lng);
       }
     });
   }
 
-  setPlacementMode(active) {
-    this.placementMode = active;
+  setPlacementMode(mode) {
+    this.placementMode = mode || null;
     const el = document.getElementById(this.containerId);
     if (el) {
-      el.style.cursor = active ? 'crosshair' : '';
+      el.style.cursor = this.placementMode ? 'crosshair' : '';
     }
   }
 
@@ -372,10 +393,13 @@ export class ApiGisMap {
           ${counterHtml}
           <div style="display:flex;gap:6px;margin-top:10px;">
             <button data-map-calc="${field.id}" style="flex:1;padding:6px 8px;border:none;border-radius:6px;background:#132a1e;color:#fff;font-size:12px;font-weight:600;cursor:pointer;">
-              🧮 В калькулятор
+              🧮 В расчёт
             </button>
             <button data-map-passport="${field.id}" style="flex:1;padding:6px 8px;border:none;border-radius:6px;background:#f59e0b;color:#132a1e;font-size:12px;font-weight:700;cursor:pointer;">
               📄 Паспорт
+            </button>
+            <button data-delete-field="${field.id}" title="Удалить поле" style="padding:6px 8px;border:1px solid #fca5a5;border-radius:6px;background:#fee2e2;color:#b91c1c;font-size:12px;font-weight:700;cursor:pointer;">
+              🗑️
             </button>
           </div>
         </div>
@@ -385,11 +409,18 @@ export class ApiGisMap {
       poly.on('popupopen', () => {
         const calcBtn = document.querySelector(`[data-map-calc="${field.id}"]`);
         const passBtn = document.querySelector(`[data-map-passport="${field.id}"]`);
+        const delBtn = document.querySelector(`[data-delete-field="${field.id}"]`);
         if (calcBtn && this.callbacks.onOpenInCalculator) {
           calcBtn.onclick = () => this.callbacks.onOpenInCalculator(field.id);
         }
         if (passBtn && this.callbacks.onOpenPassport) {
           passBtn.onclick = () => this.callbacks.onOpenPassport(field.id);
+        }
+        if (delBtn && this.callbacks.onDeleteField) {
+          delBtn.onclick = () => {
+            poly.closePopup();
+            this.callbacks.onDeleteField(field.id);
+          };
         }
       });
     }
@@ -399,7 +430,7 @@ export class ApiGisMap {
       const pInfo = PESTICIDE_CLASSES[tr.hazardClass] || PESTICIDE_CLASSES[3];
 
       // Контур обрабатываемого поля
-      window.L.polygon(tr.polygon, {
+      const trPoly = window.L.polygon(tr.polygon, {
         color: '#991b1b',
         weight: 2,
         fillColor: '#ef4444',
@@ -418,9 +449,22 @@ export class ApiGisMap {
             <div style="margin-top:6px;font-size:11.5px;color:#991b1b;background:#fee2e2;padding:5px;border-radius:6px;">
               ${pInfo.recommendation}
             </div>
+            <button data-delete-treatment="${tr.id}" style="width:100%;margin-top:8px;padding:6px 10px;border:1px solid #fca5a5;border-radius:6px;background:#fee2e2;color:#b91c1c;font-size:12px;font-weight:700;cursor:pointer;">
+              🗑️ Убрать зону СЗР с карты
+            </button>
           </div>`
         )
         .addTo(this.layers.saturnZones);
+
+      trPoly.on('popupopen', () => {
+        const delTrBtn = document.querySelector(`[data-delete-treatment="${tr.id}"]`);
+        if (delTrBtn && this.callbacks.onDeleteTreatment) {
+          delTrBtn.onclick = () => {
+            trPoly.closePopup();
+            this.callbacks.onDeleteTreatment(tr.id);
+          };
+        }
+      });
 
       // Буферный радиус по ФЗ-490 (7 км)
       window.L.circle([tr.lat, tr.lon], {

@@ -13,6 +13,7 @@ import {
 import {
   ApiGisMap,
   analyzeSpatialCoverage,
+  buildFieldPolygonFromCenter,
   polygonCentroid,
   haversineKm,
   isPointInWindPlume,
@@ -142,53 +143,14 @@ function refreshAll() {
   const analysis = analyzeSpatialCoverage(state.fields, state.apiaries, state.treatments, state.wind);
   state.lastAnalysis = analysis;
 
-  updateKpis(analysis);
+  const lotsBadge = document.getElementById('tab-lots-count');
+  if (lotsBadge) lotsBadge.textContent = `${state.fields.length}`;
+
   renderSpatialSidebar(analysis);
   renderExchangeGrid(analysis);
   if (gisMap) {
     gisMap.render(analysis, state.treatments, state.wind);
   }
-}
-
-function updateKpis(analysis) {
-  let totalHa = 0;
-  let totalReq = 0;
-  let totalCovered = 0;
-  let totalPotentialGainRub = 0;
-  let fieldHazards = 0;
-
-  for (const rep of analysis.fieldReports) {
-    totalHa += rep.field.areaHa;
-    totalReq += rep.requiredHives;
-    totalCovered += Math.min(rep.requiredHives, rep.effectiveHives);
-    const econ = calculateDualEconomics({
-      cropId: rep.field.cropId,
-      areaHa: rep.field.areaHa,
-      hives: rep.requiredHives,
-      baseYieldTonsHa: rep.crop.baseYieldTonsHa,
-      cropPriceRubTon: rep.crop.cropPriceRubTon,
-      feePerHiveRub: rep.field.feePerHiveRub,
-      honeyPriceRubKg: 240,
-    });
-    totalPotentialGainRub += econ.agroNetProfitRub;
-    if (rep.saturnAlerts.length > 0) fieldHazards += 1;
-  }
-
-  const apiariesAtRisk = analysis.apiaryReports.filter((r) => r.isAtRisk).length;
-  const totalHazards = fieldHazards + apiariesAtRisk;
-  const coveragePct = totalReq > 0 ? Math.round((totalCovered / totalReq) * 100) : 0;
-
-  document.getElementById('kpi-total-ha').textContent = `${totalHa.toLocaleString('ru-RU')} га`;
-  document.getElementById('kpi-fields-count').textContent = `${state.fields.length} активных полей кластера`;
-  document.getElementById('kpi-coverage').textContent = `${coveragePct}%`;
-  document.getElementById('kpi-hives-ratio').textContent = `${totalCovered} / ${totalReq} семей в радиусе 2 км`;
-  document.getElementById('kpi-yield-money').textContent = formatRub(totalPotentialGainRub);
-  document.getElementById('kpi-hazards').textContent = `${totalHazards}`;
-  document.getElementById('kpi-hazards-note').textContent =
-    totalHazards > 0
-      ? `Пасек в 7-км зоне риска: ${apiariesAtRisk} • Полей: ${fieldHazards}`
-      : 'Все кочевые пасеки вне зоны сноса СЗР';
-  document.getElementById('tab-lots-count').textContent = `${state.fields.length}`;
 }
 
 function renderSpatialSidebar(analysis) {
@@ -639,13 +601,37 @@ function openPassportModal(fieldId) {
   document.getElementById('passport-modal').classList.remove('hidden');
 }
 
-/* ==================== УПРАВЛЕНИЕ ПАСЕКАМИ ==================== */
+/* ==================== УПРАВЛЕНИЕ ПАСЕКАМИ, ПОЛЯМИ И СЗР ==================== */
+
+const PLACEMENT_HINTS = {
+  apiary: '🎯 Прицел пасеки: кликните в любое место карты, где хотите разместить ульи.',
+  field: '🎯 Прицел поля: кликните на карте центр нового поля, которое нужно опылить.',
+  treatment: '🎯 Прицел СЗР: кликните точку очага химобработки, чтобы увидеть зону 7 км и ветровой шлейф.',
+};
+
+function startPlacementMode(mode) {
+  const banner = document.getElementById('placement-banner');
+  const textEl = document.getElementById('placement-banner-text');
+
+  if (!mode) {
+    banner.classList.add('hidden');
+    gisMap?.setPlacementMode(null);
+    return;
+  }
+
+  if (state.activeTab !== 'gis') {
+    switchTab('gis');
+  }
+  textEl.textContent = PLACEMENT_HINTS[mode] || '🎯 Кликните на карту.';
+  banner.classList.remove('hidden');
+  gisMap?.setPlacementMode(mode);
+}
 
 function populateApiaryFieldSelect() {
   const sel = document.getElementById('ap-field');
   if (!sel) return;
   const current = sel.value;
-  sel.innerHTML = '<option value="">Свободный кочевой точок (по радиусу 2 км)</option>';
+  sel.innerHTML = '<option value="">Авто (все поля в радиусе 2 км)</option>';
   state.fields.forEach((f) => {
     const crop = CROPS_DB[f.cropId];
     sel.appendChild(new Option(`${crop.icon} ${f.name} (${f.areaHa} га)`, f.id));
@@ -684,7 +670,7 @@ function updateApiarySafetyPreview(lat, lon) {
   if (hits.length > 0) {
     const h = hits[0];
     previewEl.innerHTML = `<span class="status-pill danger" style="width:100%;justify-content:flex-start;border-radius:8px;padding:8px 10px;">
-      🚨 Точка в ${h.distKm.toFixed(1)} км от обработки ФГИС «Сатурн» ${h.tr.saturnNumber}${h.inPlume ? ' + прямо в ветровом шлейфе!' : ' (радиус 7 км).'}
+      🚨 Точка в ${h.distKm.toFixed(1)} км от обработки ${h.tr.saturnNumber}${h.inPlume ? ' + прямо в ветровом шлейфе!' : ' (радиус 7 км).'}
     </span>`;
   } else {
     previewEl.innerHTML = `<span class="status-pill safe" style="width:100%;justify-content:flex-start;border-radius:8px;padding:8px 10px;">
@@ -699,22 +685,22 @@ function openApiaryModal({ apiary = null, lat = null, lon = null } = {}) {
   const idx = state.apiaries.length + 1;
 
   document.getElementById('apiary-modal-title').textContent = isEdit
-    ? `✏️ Редактирование: ${apiary.name}`
-    : '🐝 Новый кочевой прицеп на карте';
+    ? `✏️ Изменить пасеку: ${apiary.name}`
+    : '🐝 Добавить пасеку (ульи) на карту';
 
   document.getElementById('ap-id').value = isEdit ? apiary.id : '';
-  document.getElementById('ap-name').value = isEdit ? apiary.name : `Кочевой точок №${idx}`;
-  document.getElementById('ap-beekeeper').value = isEdit ? apiary.beekeeper : 'Дежурный пасечник кластера';
+  document.getElementById('ap-name').value = isEdit ? apiary.name : `Пасека №${idx}`;
+  document.getElementById('ap-beekeeper').value = isEdit ? apiary.beekeeper : 'Пасечник кластера';
   document.getElementById('ap-hives').value = isEdit ? apiary.hivesCount : 60;
   document.getElementById('ap-trailer').value = isEdit
     ? apiary.trailerType
-    : 'Кочевой прицеп-павильон (Дадан)';
+    : 'Кочевая пасека (ульи Дадан)';
   document.getElementById('ap-field').value = isEdit && apiary.assignedFieldId ? apiary.assignedFieldId : '';
   document.getElementById('ap-vet').value = isEdit ? apiary.vetPassport : `ВП-57-0881${idx}`;
   document.getElementById('ap-phone').value = isEdit ? apiary.phone : '+7 (915) 440-22-18';
 
-  const targetLat = isEdit ? apiary.lat : Number((lat ?? CLUSTER_CENTER.lat).toFixed(5));
-  const targetLon = isEdit ? apiary.lon : Number((lon ?? CLUSTER_CENTER.lon).toFixed(5));
+  const targetLat = Number((isEdit ? apiary.lat : (lat ?? CLUSTER_CENTER.lat)).toFixed(4));
+  const targetLon = Number((isEdit ? apiary.lon : (lon ?? CLUSTER_CENTER.lon)).toFixed(4));
   document.getElementById('ap-lat').value = targetLat;
   document.getElementById('ap-lon').value = targetLon;
 
@@ -728,6 +714,21 @@ function openApiaryModal({ apiary = null, lat = null, lon = null } = {}) {
   document.getElementById('apiary-modal').classList.remove('hidden');
 }
 
+function openFieldModal(lat, lon) {
+  const idx = state.fields.length + 1;
+  document.getElementById('nf-name').value = `Поле №${idx} «Новое»`;
+  document.getElementById('nf-farm').value = 'КФХ «Урожай»';
+  document.getElementById('nf-lat').value = Number((lat ?? CLUSTER_CENTER.lat).toFixed(4));
+  document.getElementById('nf-lon').value = Number((lon ?? CLUSTER_CENTER.lon).toFixed(4));
+  document.getElementById('add-field-modal').classList.remove('hidden');
+}
+
+function openTreatmentModal(lat, lon) {
+  document.getElementById('tr-lat').value = Number((lat ?? CLUSTER_CENTER.lat).toFixed(4));
+  document.getElementById('tr-lon').value = Number((lon ?? CLUSTER_CENTER.lon).toFixed(4));
+  document.getElementById('treatment-modal').classList.remove('hidden');
+}
+
 function deleteApiaryById(apiaryId) {
   const target = state.apiaries.find((a) => a.id === apiaryId);
   if (!target) return;
@@ -735,6 +736,36 @@ function deleteApiaryById(apiaryId) {
   document.getElementById('apiary-modal').classList.add('hidden');
   refreshAll();
   showToast(`Пасека «${target.name}» удалена с карты, покрытие полей пересчитано.`);
+}
+
+function deleteFieldById(fieldId) {
+  const target = state.fields.find((f) => f.id === fieldId);
+  if (!target) return;
+  state.fields = state.fields.filter((f) => f.id !== fieldId);
+  state.signedContracts.delete(fieldId);
+  populateApiaryFieldSelect();
+  refreshAll();
+  showToast(`Поле «${target.name}» удалено с карты.`);
+}
+
+function deleteTreatmentById(trId) {
+  const target = state.treatments.find((t) => t.id === trId);
+  if (!target) return;
+  state.treatments = state.treatments.filter((t) => t.id !== trId);
+  refreshAll();
+  showToast(`Зона химобработки ${target.saturnNumber} убрана с карты.`);
+}
+
+function resetDemoScenario() {
+  state.fields = structuredClone(INITIAL_FIELDS);
+  state.apiaries = structuredClone(INITIAL_APIARIES);
+  state.treatments = structuredClone(INITIAL_SATURN_TREATMENTS);
+  state.signedContracts = new Set(['fld-1', 'fld-2']);
+  startPlacementMode(null);
+  populateApiaryFieldSelect();
+  refreshAll();
+  gisMap?.focusPoint(CLUSTER_CENTER.lat, CLUSTER_CENTER.lon, CLUSTER_CENTER.zoom);
+  showToast('🔄 Демо-сценарий кластера восстановлен к исходному состоянию.');
 }
 
 /* ==================== НАВИГАЦИЯ И СОБЫТИЯ ==================== */
@@ -758,7 +789,7 @@ function bindEvents() {
     btn.addEventListener('click', () => {
       state.role = btn.dataset.role;
       document.querySelectorAll('.role-btn').forEach((b) => b.classList.toggle('active', b === btn));
-      document.getElementById('role-banner-text').textContent = ROLE_DESCRIPTIONS[state.role];
+      showToast(ROLE_DESCRIPTIONS[state.role]);
     });
   });
 
@@ -790,25 +821,17 @@ function bindEvents() {
     refreshAll();
   });
 
-  // Режим постановки кочевого прицепа кликом на карту
-  const banner = document.getElementById('placement-banner');
-  document.getElementById('btn-place-apiary').addEventListener('click', () => {
-    banner.classList.remove('hidden');
-    gisMap.setPlacementMode(true);
-  });
-  document.getElementById('btn-cancel-placement').addEventListener('click', () => {
-    banner.classList.add('hidden');
-    gisMap.setPlacementMode(false);
-  });
+  // Прицел на карту: пасека, поле, зона химобработки
+  document.getElementById('btn-place-apiary').addEventListener('click', () => startPlacementMode('apiary'));
+  document.getElementById('btn-open-add-field').addEventListener('click', () => startPlacementMode('field'));
+  document.getElementById('btn-exchange-add-field').addEventListener('click', () => startPlacementMode('field'));
+  document.getElementById('btn-place-treatment').addEventListener('click', () => startPlacementMode('treatment'));
+  document.getElementById('btn-cancel-placement').addEventListener('click', () => startPlacementMode(null));
+  document.getElementById('btn-reset-demo').addEventListener('click', resetDemoScenario);
 
   // Фильтры биржи
   document.getElementById('filter-crop').addEventListener('change', () => renderExchangeGrid(state.lastAnalysis));
   document.getElementById('filter-status').addEventListener('change', () => renderExchangeGrid(state.lastAnalysis));
-
-  // Модальные окна
-  const openAddField = () => document.getElementById('add-field-modal').classList.remove('hidden');
-  document.getElementById('btn-open-add-field').addEventListener('click', openAddField);
-  document.getElementById('btn-exchange-add-field').addEventListener('click', openAddField);
 
   document.querySelectorAll('[data-close-modal]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -819,11 +842,10 @@ function bindEvents() {
   document.getElementById('add-field-form').addEventListener('submit', (e) => {
     e.preventDefault();
     const cropId = document.getElementById('nf-crop').value;
-    const areaHa = Number(document.getElementById('nf-area').value);
+    const areaHa = Math.max(5, Number(document.getElementById('nf-area').value));
     const feePerHiveRub = Number(document.getElementById('nf-fee').value);
-    const offset = (state.fields.length - 3) * 0.014;
-    const baseLat = CLUSTER_CENTER.lat + 0.018 + (state.fields.length % 2 === 0 ? 0.008 : -0.012);
-    const baseLon = CLUSTER_CENTER.lon + offset;
+    const centerLat = Number(Number(document.getElementById('nf-lat').value).toFixed(4));
+    const centerLon = Number(Number(document.getElementById('nf-lon').value).toFixed(4));
 
     const newField = {
       id: `fld-${Date.now()}`,
@@ -839,12 +861,7 @@ function bindEvents() {
       feePerHiveRub,
       pesticideSilenceConfirmed: document.getElementById('nf-silence').checked,
       nightAccessRoad: 'Полевой съезд с южной стороны лесополосы',
-      polygon: [
-        [baseLat, baseLon],
-        [baseLat + 0.009, baseLon + 0.002],
-        [baseLat + 0.008, baseLon + 0.020],
-        [baseLat - 0.001, baseLon + 0.018],
-      ],
+      polygon: buildFieldPolygonFromCenter(centerLat, centerLon, areaHa),
     };
 
     state.fields.unshift(newField);
@@ -855,7 +872,36 @@ function bindEvents() {
     const [cLat, cLon] = polygonCentroid(newField.polygon);
     switchTab('gis');
     gisMap.focusPoint(cLat, cLon, 13);
-    showToast(`Заявка «${newField.name}» добавлена на карту и биржу!`);
+    showToast(`🌾 Поле «${newField.name}» (${areaHa} га) размещено на карте и бирже!`);
+  });
+
+  // Добавление новой зоны химобработки (ФГИС Сатурн)
+  document.getElementById('treatment-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const lat = Number(Number(document.getElementById('tr-lat').value).toFixed(4));
+    const lon = Number(Number(document.getElementById('tr-lon').value).toFixed(4));
+    const hazardClass = Number(document.getElementById('tr-hazard').value);
+    const num = Math.floor(100 + Math.random() * 899);
+
+    const tr = {
+      id: `sat-${Date.now()}`,
+      saturnNumber: `SAT-57-${num}`,
+      farm: document.getElementById('tr-farm').value.trim(),
+      cadastral: `57:19:0060102:${num}`,
+      crop: 'Зерновые / технические культуры',
+      pesticideName: document.getElementById('tr-pesticide').value.trim(),
+      hazardClass,
+      dateWindow: 'Сегодня (22:00–04:00)',
+      lat,
+      lon,
+      polygon: buildFieldPolygonFromCenter(lat, lon, 110),
+    };
+
+    state.treatments.push(tr);
+    document.getElementById('treatment-modal').classList.add('hidden');
+    refreshAll();
+    gisMap?.focusPoint(lat, lon, 12);
+    showToast(`☢️ Зона СЗР ${tr.saturnNumber} добавлена! Пересчитаны 7-км буфер и ветровой снос.`);
   });
 
   // Форма добавления/редактирования пасеки
@@ -934,10 +980,15 @@ function bootstrap() {
   gisMap = new ApiGisMap('gis-map', {
     onOpenInCalculator: openFieldInCalculator,
     onOpenPassport: openPassportModal,
-    onPlaceApiary: (lat, lon) => {
-      document.getElementById('placement-banner').classList.add('hidden');
-      gisMap.setPlacementMode(false);
-      openApiaryModal({ lat, lon });
+    onMapTargetClick: (mode, lat, lon) => {
+      startPlacementMode(null);
+      if (mode === 'apiary') {
+        openApiaryModal({ lat, lon });
+      } else if (mode === 'field') {
+        openFieldModal(lat, lon);
+      } else if (mode === 'treatment') {
+        openTreatmentModal(lat, lon);
+      }
     },
     onEditApiary: (apiaryId) => {
       const apiary = state.apiaries.find((a) => a.id === apiaryId);
@@ -946,11 +997,17 @@ function bootstrap() {
     onDeleteApiary: (apiaryId) => {
       deleteApiaryById(apiaryId);
     },
+    onDeleteField: (fieldId) => {
+      deleteFieldById(fieldId);
+    },
+    onDeleteTreatment: (trId) => {
+      deleteTreatmentById(trId);
+    },
     onMoveApiary: (apiaryId, lat, lon) => {
       const apiary = state.apiaries.find((a) => a.id === apiaryId);
       if (!apiary) return;
-      apiary.lat = Number(lat.toFixed(5));
-      apiary.lon = Number(lon.toFixed(5));
+      apiary.lat = Number(lat.toFixed(4));
+      apiary.lon = Number(lon.toFixed(4));
       refreshAll();
       const hazard = state.treatments.find((tr) => haversineKm(apiary.lat, apiary.lon, tr.lat, tr.lon) <= 7.0);
       if (hazard) {

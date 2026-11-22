@@ -716,10 +716,17 @@ input[type='range'] {
   gap: 14px;
 }
 
+.form-row-2col {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .field-group {
   display: flex;
   flex-direction: column;
   gap: 5px;
+  min-width: 0;
 }
 
 .field-group label {
@@ -728,17 +735,22 @@ input[type='range'] {
   color: var(--text-main);
   display: flex;
   justify-content: space-between;
+  gap: 6px;
 }
 
 .field-group input,
 .field-group select,
 .field-group textarea {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   padding: 9px 11px;
   border: 1px solid var(--border-color);
   border-radius: 8px;
   background: #ffffff;
   color: var(--text-main);
   font-size: 0.9rem;
+  text-overflow: ellipsis;
 }
 
 .field-group input:focus,
@@ -957,6 +969,7 @@ input[type='range'] {
   width: 100%;
   max-height: 92vh;
   overflow-y: auto;
+  overflow-x: hidden;
   box-shadow: var(--shadow-lg);
   border: 1px solid var(--border-color);
 }
@@ -1136,7 +1149,8 @@ input[type='range'] {
 
 @media (max-width: 640px) {
   .kpi-strip,
-  .dual-results-grid {
+  .dual-results-grid,
+  .form-row-2col {
     grid-template-columns: 1fr;
   }
   .main-container {

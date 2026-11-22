@@ -40,45 +40,6 @@
   </header>
 
   <main class="main-container">
-    <!-- Верхняя сводка KPI -->
-    <section class="kpi-strip" aria-label="Ключевые показатели кластера">
-      <div class="kpi-card">
-        <div>
-          <div class="kpi-label">Площадь цветущих полей</div>
-          <div class="kpi-value" id="kpi-total-ha">0 га</div>
-          <div class="kpi-note" id="kpi-fields-count">0 активных полей</div>
-        </div>
-        <div class="kpi-icon emerald">🌱</div>
-      </div>
-
-      <div class="kpi-card">
-        <div>
-          <div class="kpi-label">Покрытие пчелосемьями</div>
-          <div class="kpi-value" id="kpi-coverage">0%</div>
-          <div class="kpi-note" id="kpi-hives-ratio">0 / 0 семей в зоне 2 км</div>
-        </div>
-        <div class="kpi-icon amber">🐝</div>
-      </div>
-
-      <div class="kpi-card">
-        <div>
-          <div class="kpi-label">Потенциал прибавки урожая</div>
-          <div class="kpi-value" id="kpi-yield-money">0 ₽</div>
-          <div class="kpi-note">Прогноз прироста от опыления</div>
-        </div>
-        <div class="kpi-icon sky">📈</div>
-      </div>
-
-      <div class="kpi-card">
-        <div>
-          <div class="kpi-label">Угрозы ФГИС «Сатурн» (7 км)</div>
-          <div class="kpi-value" id="kpi-hazards">0</div>
-          <div class="kpi-note" id="kpi-hazards-note">Сверка химобработок и сноса</div>
-        </div>
-        <div class="kpi-icon crimson">⚠️</div>
-      </div>
-    </section>
-
     <!-- Навигация по разделам -->
     <nav class="view-nav" aria-label="Разделы платформы">
       <div class="view-tabs">
@@ -91,11 +52,6 @@
         <button class="view-tab" data-tab="exchange" type="button">
           🤝 Биржа контрактов <span class="tab-count" id="tab-lots-count">0</span>
         </button>
-      </div>
-
-      <div class="role-banner" id="role-banner">
-        <span>🛰️</span>
-        <span id="role-banner-text">Режим диспетчера: видны все поля, кочевые прицепы и 7-км зоны СЗР.</span>
       </div>
     </nav>
 
@@ -119,18 +75,24 @@
               </label>
             </div>
 
-            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
               <button class="btn btn-amber btn-sm" id="btn-place-apiary" type="button">
-                📍 Поставить кочевой прицеп на карту
+                🐝 Добавить пасеку (ульи)
               </button>
-              <button class="btn btn-outline btn-sm" id="btn-open-add-field" type="button">
-                ➕ Добавить поле
+              <button class="btn btn-emerald btn-sm" id="btn-open-add-field" type="button">
+                🌾 Добавить поле
+              </button>
+              <button class="btn btn-danger-outline btn-sm" id="btn-place-treatment" type="button">
+                ☢️ Добавить химобработку
+              </button>
+              <button class="btn btn-outline btn-sm" id="btn-reset-demo" type="button">
+                🔄 Сброс демо
               </button>
             </div>
           </div>
 
           <div class="placement-banner hidden" id="placement-banner">
-            <span>🎯 Режим расстановки: кликните в любую точку карты (желательно в лесополосу у края поля), чтобы поставить кочевой прицеп и пересчитать покрытие 2 км и риск 7 км.</span>
+            <span id="placement-banner-text">🎯 Прицел: кликните по карте, чтобы выбрать точку размещения.</span>
             <button class="btn btn-outline btn-sm" id="btn-cancel-placement" type="button">Отмена</button>
           </div>
 
@@ -337,47 +299,46 @@
 
   </main>
 
-  <!-- МОДАЛЬНОЕ ОКНО: ДОБАВЛЕНИЕ И РЕДАКТИРОВАНИЕ ПАСЕКИ / ПРИЦЕПА -->
+  <!-- МОДАЛЬНОЕ ОКНО: ДОБАВЛЕНИЕ И РЕДАКТИРОВАНИЕ ПАСЕКИ / УЛЬЕВ -->
   <div class="modal-backdrop hidden" id="apiary-modal" role="dialog" aria-modal="true" aria-labelledby="apiary-modal-title">
     <div class="modal-dialog" style="max-width: 560px;">
       <div class="modal-header">
-        <h3 style="margin:0;" id="apiary-modal-title">🐝 Параметры кочевого прицепа / пасеки</h3>
+        <h3 style="margin:0;" id="apiary-modal-title">🐝 Добавить пасеку (ульи) на карту</h3>
         <button class="modal-close" data-close-modal="apiary-modal" type="button">✕</button>
       </div>
       <form id="apiary-form">
         <input type="hidden" id="ap-id" value="" />
         <div class="modal-body form-grid">
           <div class="field-group">
-            <label for="ap-name">Название пасеки / точка</label>
-            <input type="text" id="ap-name" required placeholder="Например: Кочевая пасека №6 «Медовый Спас»" />
+            <label for="ap-name">Название пасеки</label>
+            <input type="text" id="ap-name" required placeholder="Например: Пасека №6 «Медовый Спас»" />
           </div>
 
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <div class="form-row-2col">
             <div class="field-group">
               <label for="ap-beekeeper">ФИО пчеловода</label>
               <input type="text" id="ap-beekeeper" required placeholder="Соколов И.В." />
             </div>
             <div class="field-group">
-              <label for="ap-hives">Количество пчелосемей (ульев)</label>
+              <label for="ap-hives">Количество ульев (семей)</label>
               <input type="number" id="ap-hives" min="1" max="500" value="60" required />
             </div>
           </div>
 
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <div class="form-row-2col">
             <div class="field-group">
-              <label for="ap-trailer">Транспорт и тип ульев</label>
+              <label for="ap-trailer">Тип размещения ульев</label>
               <input
                 type="text"
                 id="ap-trailer"
                 list="ap-trailer-options"
                 required
-                value="Кочевой прицеп-павильон (Дадан)"
+                value="Кочевая пасека (ульи Дадан)"
               />
               <datalist id="ap-trailer-options">
-                <option value="Кочевой прицеп-павильон (Дадан)"></option>
-                <option value="Платформа КАМАЗ + прицеп (Рут)"></option>
-                <option value="Мобильный павильон ГАЗон Next"></option>
-                <option value="Стационарный точок"></option>
+                <option value="Кочевая пасека (ульи Дадан)"></option>
+                <option value="Мобильная платформа (ульи Рут)"></option>
+                <option value="Стационарная пасека"></option>
               </datalist>
             </div>
             <div class="field-group">
@@ -386,7 +347,7 @@
             </div>
           </div>
 
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <div class="form-row-2col">
             <div class="field-group">
               <label for="ap-vet">Ветеринарный паспорт</label>
               <input type="text" id="ap-vet" required placeholder="ВП-57-08816" />
@@ -397,14 +358,14 @@
             </div>
           </div>
 
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <div class="form-row-2col">
             <div class="field-group">
               <label for="ap-lat">Широта (Lat)</label>
-              <input type="number" id="ap-lat" step="0.0001" required />
+              <input type="number" id="ap-lat" step="any" required />
             </div>
             <div class="field-group">
               <label for="ap-lon">Долгота (Lon)</label>
-              <input type="number" id="ap-lon" step="0.0001" required />
+              <input type="number" id="ap-lon" step="any" required />
             </div>
           </div>
 
@@ -425,7 +386,7 @@
   <div class="modal-backdrop hidden" id="add-field-modal" role="dialog" aria-modal="true" aria-labelledby="add-field-title">
     <div class="modal-dialog" style="max-width: 540px;">
       <div class="modal-header">
-        <h3 style="margin:0;" id="add-field-title">🌾 Новая заявка поля на опыление</h3>
+        <h3 style="margin:0;" id="add-field-title">🌾 Новое поле на карте</h3>
         <button class="modal-close" data-close-modal="add-field-modal" type="button">✕</button>
       </div>
       <form id="add-field-form">
@@ -434,27 +395,29 @@
             <label for="nf-name">Название поля / участка</label>
             <input type="text" id="nf-name" required placeholder="Например: Поле №31 «Южный склон»" />
           </div>
-          <div class="field-group">
-            <label for="nf-farm">Хозяйство / КФХ</label>
-            <input type="text" id="nf-farm" required placeholder="ООО «Рассвет-Агро»" />
+          <div class="form-row-2col">
+            <div class="field-group">
+              <label for="nf-farm">Хозяйство / КФХ</label>
+              <input type="text" id="nf-farm" required placeholder="ООО «Рассвет-Агро»" />
+            </div>
+            <div class="field-group">
+              <label for="nf-cadastral">Кадастровый номер</label>
+              <input type="text" id="nf-cadastral" required value="57:19:0040911:105" />
+            </div>
           </div>
-          <div class="field-group">
-            <label for="nf-cadastral">Кадастровый номер (для сверки с ФГИС «Сатурн»)</label>
-            <input type="text" id="nf-cadastral" required value="57:19:0040911:105" />
-          </div>
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <div class="form-row-2col">
             <div class="field-group">
               <label for="nf-crop">Культура</label>
               <select id="nf-crop"></select>
             </div>
             <div class="field-group">
               <label for="nf-area">Площадь (га)</label>
-              <input type="number" id="nf-area" min="5" max="1000" value="85" required />
+              <input type="number" id="nf-area" min="5" max="1000" value="90" required />
             </div>
           </div>
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <div class="form-row-2col">
             <div class="field-group">
-              <label for="nf-fee">Ставка за семью (₽)</label>
+              <label for="nf-fee">Ставка за улей (₽)</label>
               <input type="number" id="nf-fee" min="0" step="100" value="2400" required />
             </div>
             <div class="field-group">
@@ -462,14 +425,70 @@
               <input type="text" id="nf-agronomist" required value="Иванов П.С." />
             </div>
           </div>
+          <div class="form-row-2col">
+            <div class="field-group">
+              <label for="nf-lat">Широта центра (Lat)</label>
+              <input type="number" id="nf-lat" step="any" required />
+            </div>
+            <div class="field-group">
+              <label for="nf-lon">Долгота центра (Lon)</label>
+              <input type="number" id="nf-lon" step="any" required />
+            </div>
+          </div>
           <label style="display:flex; align-items:center; gap:8px; font-size:0.85rem; cursor:pointer;">
             <input type="checkbox" id="nf-silence" checked />
-            Гарантия «пестицидной тишины» (запрет СЗР 1–2 класса на весь период цветения)
+            Гарантия «пестицидной тишины» (без СЗР 1–2 класса в цветение)
           </label>
         </div>
         <div class="modal-footer">
           <button class="btn btn-outline" data-close-modal="add-field-modal" type="button">Отмена</button>
-          <button class="btn btn-primary" type="submit">Разместить поле на карте и бирже</button>
+          <button class="btn btn-primary" type="submit">Разместить поле на карте</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- МОДАЛЬНОЕ ОКНО: ДОБАВЛЕНИЕ ХИМОБРАБОТКИ ФГИС «САТУРН» -->
+  <div class="modal-backdrop hidden" id="treatment-modal" role="dialog" aria-modal="true" aria-labelledby="treatment-modal-title">
+    <div class="modal-dialog" style="max-width: 520px;">
+      <div class="modal-header">
+        <h3 style="margin:0;" id="treatment-modal-title">☢️ Новая зона химобработки (ФГИС «Сатурн»)</h3>
+        <button class="modal-close" data-close-modal="treatment-modal" type="button">✕</button>
+      </div>
+      <form id="treatment-form">
+        <div class="modal-body form-grid">
+          <div class="field-group">
+            <label for="tr-farm">Хозяйство, вносящее препарат</label>
+            <input type="text" id="tr-farm" required value="ООО «Нива-Агро»" />
+          </div>
+          <div class="form-row-2col">
+            <div class="field-group">
+              <label for="tr-pesticide">Препарат (СЗР)</label>
+              <input type="text" id="tr-pesticide" required value="Пиретроид Экстра (инсектицид)" />
+            </div>
+            <div class="field-group">
+              <label for="tr-hazard">Класс опасности для пчёл</label>
+              <select id="tr-hazard">
+                <option value="1">1 класс (7 км, изоляция 120 ч)</option>
+                <option value="2">2 класс (7 км, изоляция 72 ч)</option>
+                <option value="3">3 класс (7 км, изоляция 24 ч)</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row-2col">
+            <div class="field-group">
+              <label for="tr-lat">Широта очага (Lat)</label>
+              <input type="number" id="tr-lat" step="any" required />
+            </div>
+            <div class="field-group">
+              <label for="tr-lon">Долгота очага (Lon)</label>
+              <input type="number" id="tr-lon" step="any" required />
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" data-close-modal="treatment-modal" type="button">Отмена</button>
+          <button class="btn btn-danger-outline" type="submit">Показать зону 7 км и шлейф на карте</button>
         </div>
       </form>
     </div>
