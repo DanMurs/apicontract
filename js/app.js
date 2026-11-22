@@ -9,7 +9,7 @@ import {
   INITIAL_FIELDS,
   INITIAL_APIARIES,
   INITIAL_SATURN_TREATMENTS,
-} from './data.js?v=7';
+} from './data.js?v=8';
 import {
   ApiGisMap,
   analyzeSpatialCoverage,
@@ -17,13 +17,13 @@ import {
   polygonCentroid,
   haversineKm,
   isPointInWindPlume,
-} from './map.js?v=7';
+} from './map.js?v=8';
 import {
   calculateDualEconomics,
   evaluateMeteoConditions,
   fetchClusterWeather,
   formatWindDirection,
-} from './calculator.js?v=7';
+} from './calculator.js?v=8';
 
 const state = {
   activeTab: 'gis',
@@ -39,6 +39,8 @@ const state = {
     tempC: 22.4,
     humidityPct: 54,
     source: 'fallback',
+    lat: CLUSTER_CENTER.lat,
+    lon: CLUSTER_CENTER.lon,
   },
   activePassportFieldId: null,
   lastAnalysis: null,
@@ -205,7 +207,7 @@ function renderSpatialSidebar(analysis) {
 }
 
 function updateMeteoPanel() {
-  const { tempC, humidityPct, source } = state.weather;
+  const { tempC, humidityPct, source, lat, lon } = state.weather;
   const { directionDeg, speedMs } = state.wind;
   const evalRes = evaluateMeteoConditions(tempC, humidityPct, speedMs, directionDeg);
 
@@ -213,8 +215,9 @@ function updateMeteoPanel() {
   document.getElementById('meteo-humidity').textContent = `${Math.round(humidityPct)} %`;
   document.getElementById('meteo-delta-t').textContent = `${evalRes.deltaT.toFixed(1)} °C`;
 
+  const coordText = `${lat.toFixed(2)}, ${lon.toFixed(2)}`;
   const badge = document.getElementById('meteo-source-badge');
-  badge.textContent = source === 'live' ? 'Live Open-Meteo' : 'Модель кластера';
+  badge.textContent = source === 'live' ? `Live (${coordText})` : `Модель (${coordText})`;
   badge.className = `status-pill ${source === 'live' ? 'safe' : 'warn'}`;
 
   document.getElementById('wind-dir-label').textContent = formatWindDirection(directionDeg);
@@ -227,12 +230,20 @@ function updateMeteoPanel() {
   sprayEl.innerHTML = `<span class="status-pill ${evalRes.sprayLevel}" style="width:100%;justify-content:flex-start;border-radius:8px;padding:7px 10px;">${evalRes.sprayText}</span>`;
 }
 
-async function initWeather() {
-  const live = await fetchClusterWeather(CLUSTER_CENTER.lat, CLUSTER_CENTER.lon);
+async function loadWeatherAt(lat, lon, notify = false) {
+  const btn = document.getElementById('btn-refresh-weather');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳ Загрузка...';
+  }
+
+  const live = await fetchClusterWeather(lat, lon);
   state.weather = {
     tempC: live.tempC,
     humidityPct: live.humidityPct,
     source: live.source,
+    lat: Number(lat),
+    lon: Number(lon),
   };
   state.wind = {
     directionDeg: Math.round(live.windDirectionDeg / 5) * 5,
@@ -246,6 +257,19 @@ async function initWeather() {
 
   updateMeteoPanel();
   refreshAll();
+
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = '🔄 Погода здесь';
+  }
+
+  if (notify) {
+    showToast(
+      live.source === 'live'
+        ? `🌤️ Погода для (${lat.toFixed(2)}, ${lon.toFixed(2)}): ${live.tempC.toFixed(1)} °C, влажность ${Math.round(live.humidityPct)}%, ветер ${live.windSpeedMs.toFixed(1)} м/с`
+        : `⚠️ Нет связи с Open-Meteo — показана резервная модель для (${lat.toFixed(2)}, ${lon.toFixed(2)}).`
+    );
+  }
 }
 
 /* ==================== КАЛЬКУЛЯТОР ==================== */
@@ -805,6 +829,12 @@ function bindEvents() {
     refreshAll();
   });
 
+  // Кнопка обновления погоды по центру видимой области карты
+  document.getElementById('btn-refresh-weather').addEventListener('click', () => {
+    const center = gisMap ? gisMap.getCenter() : { lat: CLUSTER_CENTER.lat, lon: CLUSTER_CENTER.lon };
+    loadWeatherAt(center.lat, center.lon, true);
+  });
+
   // Прицел на карту: пасека, поле, зона химобработки
   document.getElementById('btn-place-apiary').addEventListener('click', () => startPlacementMode('apiary'));
   document.getElementById('btn-open-add-field').addEventListener('click', () => startPlacementMode('field'));
@@ -1008,7 +1038,7 @@ function bootstrap() {
   bindEvents();
   updateMeteoPanel();
   refreshAll();
-  initWeather();
+  loadWeatherAt(CLUSTER_CENTER.lat, CLUSTER_CENTER.lon, false);
 }
 
 document.addEventListener('DOMContentLoaded', bootstrap);

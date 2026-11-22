@@ -13,7 +13,7 @@
     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
     crossorigin=""
   />
-  <link rel="stylesheet" href="./css/styles.css?v=7" />
+  <link rel="stylesheet" href="./css/styles.css?v=8" />
 </head>
 <body>
   <header class="app-header">
@@ -103,6 +103,14 @@
                 <span class="meteo-chip">🌡️ <strong id="meteo-temp">-- °C</strong></span>
                 <span class="meteo-chip">💧 <strong id="meteo-humidity">-- %</strong></span>
                 <span class="meteo-chip">ΔT: <strong id="meteo-delta-t">-- °C</strong></span>
+                <button
+                  class="btn-meteo-refresh"
+                  id="btn-refresh-weather"
+                  type="button"
+                  title="Запросить погоду для текущей области карты"
+                >
+                  🔄 Погода здесь
+                </button>
               </div>
             </div>
 
@@ -511,6 +519,6 @@
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
     crossorigin=""
   ></script>
-  <script type="module" src="./js/app.js?v=7"></script>
+  <script type="module" src="./js/app.js?v=8"></script>
 </body>
 </html>

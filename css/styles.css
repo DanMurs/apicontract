@@ -475,6 +475,31 @@ textarea {
   color: var(--text-main);
 }
 
+.btn-meteo-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--amber);
+  background: var(--amber-soft);
+  color: #78350f;
+  font-size: 0.77rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.btn-meteo-refresh:hover:not(:disabled) {
+  background: var(--amber);
+  color: #132a1e;
+}
+
+.btn-meteo-refresh:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
 .wind-sliders-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

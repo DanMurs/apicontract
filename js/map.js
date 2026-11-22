@@ -4,7 +4,7 @@
  * и сектор ветрового сноса пестицидов.
  */
 
-import { CROPS_DB, PESTICIDE_CLASSES, CLUSTER_CENTER } from './data.js?v=7';
+import { CROPS_DB, PESTICIDE_CLASSES, CLUSTER_CENTER } from './data.js?v=8';
 
 const EARTH_RADIUS_KM = 6371;
 
@@ -340,6 +340,14 @@ export class ApiGisMap {
     if (this.map) {
       this.map.flyTo([lat, lon], zoom, { duration: 0.65 });
     }
+  }
+
+  getCenter() {
+    if (!this.map) {
+      return { lat: CLUSTER_CENTER.lat, lon: CLUSTER_CENTER.lon };
+    }
+    const c = this.map.getCenter();
+    return { lat: Number(c.lat.toFixed(4)), lon: Number(c.lng.toFixed(4)) };
   }
 
   render(analysis, treatments, windState) {
