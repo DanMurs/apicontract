@@ -9,7 +9,7 @@ import {
   INITIAL_FIELDS,
   INITIAL_APIARIES,
   INITIAL_SATURN_TREATMENTS,
-} from './data.js';
+} from './data.js?v=7';
 import {
   ApiGisMap,
   analyzeSpatialCoverage,
@@ -17,13 +17,13 @@ import {
   polygonCentroid,
   haversineKm,
   isPointInWindPlume,
-} from './map.js';
+} from './map.js?v=7';
 import {
   calculateDualEconomics,
   evaluateMeteoConditions,
   fetchClusterWeather,
   formatWindDirection,
-} from './calculator.js';
+} from './calculator.js?v=7';
 
 const state = {
   activeTab: 'gis',

@@ -489,10 +489,6 @@ textarea {
   font-size: 0.78rem;
 }
 
-.spatial-list-tall {
-  max-height: 680px;
-}
-
 .map-legend {
   padding: 10px 16px;
   border-top: 1px solid var(--border-color);
@@ -532,6 +528,12 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.gis-sidebar > .panel-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .meteo-widget {
@@ -619,6 +621,11 @@ input[type='range'] {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.spatial-list.spatial-list-tall {
+  flex: 1 1 auto;
+  max-height: 720px;
 }
 
 .spatial-item {
@@ -1085,8 +1092,8 @@ input[type='range'] {
   .kpi-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .spatial-list-tall {
-    max-height: 360px;
+  .spatial-list.spatial-list-tall {
+    max-height: 420px;
   }
 }
 
