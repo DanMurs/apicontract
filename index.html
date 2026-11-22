@@ -13,7 +13,7 @@
     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
     crossorigin=""
   />
-  <link rel="stylesheet" href="./css/styles.css?v=15" />
+  <link rel="stylesheet" href="./css/styles.css?v=16" />
 </head>
 <body>
   <header class="app-header">
@@ -516,6 +516,22 @@
     </div>
   </div>
 
+  <!-- МОДАЛЬНОЕ ОКНО: КОНТАКТЫ ХОЗЯЙСТВА И УСЛОВИЯ ДОГОВОРА -->
+  <div class="modal-backdrop hidden" id="contact-modal" role="dialog" aria-modal="true" aria-labelledby="contact-modal-title">
+    <div class="modal-dialog" style="max-width: 560px;">
+      <div class="modal-header">
+        <h3 style="margin:0;" id="contact-modal-title">📞 Связь с владельцем поля</h3>
+        <button class="modal-close" data-close-modal="contact-modal" type="button">✕</button>
+      </div>
+      <div class="modal-body" id="contact-content"></div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" data-close-modal="contact-modal" type="button">Закрыть</button>
+        <button class="btn btn-amber" id="btn-contact-passport" type="button">📄 Паспорт кочёвки</button>
+        <button class="btn btn-emerald" id="btn-contact-go-map" type="button">📍 Поставить ульи на это поле</button>
+      </div>
+    </div>
+  </div>
+
   <!-- МОДАЛЬНОЕ ОКНО: ПАСПОРТ-ДОГОВОР КОЧЁВКИ С QR-КОДОМ -->
   <div class="modal-backdrop hidden" id="passport-modal" role="dialog" aria-modal="true" aria-labelledby="passport-title">
     <div class="modal-dialog">
@@ -539,6 +555,6 @@
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
     crossorigin=""
   ></script>
-  <script type="module" src="./js/app.js?v=14"></script>
+  <script type="module" src="./js/app.js?v=16"></script>
 </body>
 </html>

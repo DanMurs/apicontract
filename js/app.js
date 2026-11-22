@@ -9,7 +9,7 @@ import {
   INITIAL_FIELDS,
   INITIAL_APIARIES,
   INITIAL_SATURN_TREATMENTS,
-} from './data.js?v=14';
+} from './data.js?v=16';
 import {
   ApiGisMap,
   analyzeSpatialCoverage,
@@ -18,13 +18,13 @@ import {
   polygonCentroid,
   haversineKm,
   isPointInWindPlume,
-} from './map.js?v=14';
+} from './map.js?v=16';
 import {
   calculateDualEconomics,
   evaluateMeteoConditions,
   fetchClusterWeather,
   formatWindDirection,
-} from './calculator.js?v=14';
+} from './calculator.js?v=16';
 
 const state = {
   activeTab: 'gis',
@@ -431,9 +431,12 @@ function renderExchangeGrid(analysis) {
             ? `<span class="status-pill safe">🛡️ Пестицидная тишина</span>`
             : `<span class="status-pill warn">⏳ Тишина не подтверждена</span>`;
 
-      const contractBadge = isSigned
-        ? `<span class="status-pill safe">✅ Контракт оформлен</span>`
-        : `<span class="status-pill warn">Дефицит: ${deficitHives} сем.</span>`;
+      const contractBadge =
+        coveragePct >= 80
+          ? `<span class="status-pill safe">✅ Укомплектовано (${coveragePct}%)</span>`
+          : isSigned
+            ? `<span class="status-pill warn">🤝 Есть договор (нужно +${deficitHives} сем.)</span>`
+            : `<span class="status-pill warn">Дефицит: ${deficitHives} сем.</span>`;
 
       return `
         <article class="lot-card">
@@ -461,16 +464,12 @@ function renderExchangeGrid(analysis) {
           </div>
 
           <div class="lot-actions">
-            <button class="btn btn-amber btn-sm" data-passport="${field.id}" type="button">
-              📄 Паспорт кочёвки
+            <button class="btn btn-emerald btn-sm" data-contact-field="${field.id}" type="button">
+              📞 Связаться с хозяйством
             </button>
-            ${
-              deficitHives > 0
-                ? `<button class="btn btn-emerald btn-sm" data-assign-brigade="${field.id}" type="button">
-                    🚛 Поставить пасеку
-                   </button>`
-                : ''
-            }
+            <button class="btn btn-amber btn-sm" data-passport="${field.id}" type="button">
+              📄 Паспорт
+            </button>
             <button class="btn btn-outline btn-sm" data-focus-field="${centroid[0]},${centroid[1]}" type="button">
               🗺️ Карта
             </button>
@@ -496,45 +495,75 @@ function renderExchangeGrid(analysis) {
       setTimeout(() => gisMap?.focusPoint(lat, lon, 13), 120);
     });
   });
-  grid.querySelectorAll('[data-assign-brigade]').forEach((btn) => {
-    btn.addEventListener('click', () => deployNomadicTrailerToField(btn.dataset.assignBrigade));
+  grid.querySelectorAll('[data-contact-field]').forEach((btn) => {
+    btn.addEventListener('click', () => openContactModal(btn.dataset.contactField));
   });
 }
 
-function deployNomadicTrailerToField(fieldId) {
-  const field = state.fields.find((f) => f.id === fieldId);
-  if (!field) return;
-  const edgePoint = field.polygon[0];
-  const standLat = Number((edgePoint[0] - 0.0012).toFixed(5));
-  const standLon = Number((edgePoint[1] + 0.0015).toFixed(5));
+function openContactModal(fieldId) {
+  const rep = state.lastAnalysis?.fieldReports.find((r) => r.field.id === fieldId);
+  if (!rep) return;
 
-  // Перемещаем свободную бригаду api-5 или создаём новый кочевой прицеп
-  const freeBrigade = state.apiaries.find((a) => !a.assignedFieldId);
-  if (freeBrigade) {
-    freeBrigade.lat = standLat;
-    freeBrigade.lon = standLon;
-    freeBrigade.assignedFieldId = field.id;
-    showToast(`Кочевая бригада «${freeBrigade.name}» (${freeBrigade.hivesCount} ульев) переброшена к полю «${field.name}»!`);
-  } else {
-    const nextNum = state.apiaries.length + 1;
-    state.apiaries.push({
-      id: `api-${Date.now()}`,
-      name: `Кочевой отряд №${nextNum} «АпиСервис»`,
-      beekeeper: 'Соколов И.В.',
-      phone: '+7 (910) 552-18-04',
-      vetPassport: `ВП-57-04910${nextNum}`,
-      type: 'nomadic',
-      trailerType: 'Мобильный павильон (80 ульев Дадан)',
-      hivesCount: 80,
-      lat: standLat,
-      lon: standLon,
-      assignedFieldId: field.id,
-    });
-    showToast(`На кромку поля «${field.name}» поставлен новый кочевой прицеп на 80 ульев!`);
-  }
+  const { field, crop, centroid, requiredHives, effectiveHives, deficitHives, coveragePct, saturnAlerts } = rep;
+  const telHref = `tel:${field.phone.replace(/[^\d+]/g, '')}`;
 
-  state.signedContracts.add(field.id);
-  refreshAll();
+  const saturnNote =
+    saturnAlerts.length > 0
+      ? `<div class="status-pill danger" style="width:100%;justify-content:flex-start;border-radius:8px;padding:8px 10px;margin-top:10px;">
+          ⚠️ В ${saturnAlerts[0].distKm.toFixed(1)} км запланирована обработка №${saturnAlerts[0].treatment.saturnNumber} (${saturnAlerts[0].treatment.dateWindow}) — обязательно согласуйте график изоляции пчёл!
+         </div>`
+      : `<div class="status-pill safe" style="width:100%;justify-content:flex-start;border-radius:8px;padding:8px 10px;margin-top:10px;">
+          ✅ На период цветения угроз ФГИС «Сатурн» в радиусе 7 км нет.
+         </div>`;
+
+  document.getElementById('contact-content').innerHTML = `
+    <div style="background:#fafcfa;border:1px solid var(--border-color);border-radius:12px;padding:14px;margin-bottom:14px;">
+      <div style="font-size:0.78rem;color:var(--text-muted);text-transform:uppercase;font-weight:700;">Сельхозпредприятие</div>
+      <div style="font-size:1.1rem;font-weight:800;margin:2px 0 8px;">${field.farm}</div>
+      <div style="font-size:0.9rem;margin-bottom:10px;">
+        <b>Агроном / ответственный:</b> ${field.agronomist}
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+        <a href="${telHref}" class="btn btn-emerald btn-sm" style="text-decoration:none;">
+          📞 Позвонить: ${field.phone}
+        </a>
+        <button class="btn btn-outline btn-sm" id="btn-copy-farm-phone" type="button">
+          📋 Скопировать номер
+        </button>
+      </div>
+    </div>
+
+    <div style="font-size:0.86rem;line-height:1.55;">
+      <div><b>Участок:</b> ${crop.icon} ${field.name} (${field.areaHa} га)</div>
+      <div><b>Кадастровый номер:</b> ${field.cadastral}</div>
+      <div><b>Окно цветения:</b> ${field.bloomStart} — ${field.bloomEnd}</div>
+      <div><b>Потребность в ульях:</b> ${requiredHives} семей (сейчас покрыто ${effectiveHives} — <b>${coveragePct}%</b>${deficitHives > 0 ? `, не хватает ${deficitHives} сем.` : ''})</div>
+      <div><b>Оплата опыления:</b> ${formatRub(field.feePerHiveRub)} за 1 пчелосемью</div>
+      <div><b>Подъезд к полю:</b> ${field.nightAccessRoad}</div>
+    </div>
+    ${saturnNote}
+  `;
+
+  document.getElementById('btn-copy-farm-phone').onclick = () => {
+    navigator.clipboard?.writeText(field.phone).catch(() => {});
+    showToast(`Номер ${field.phone} (${field.agronomist}) скопирован!`);
+  };
+
+  document.getElementById('btn-contact-passport').onclick = () => {
+    document.getElementById('contact-modal').classList.add('hidden');
+    openPassportModal(field.id);
+  };
+
+  document.getElementById('btn-contact-go-map').onclick = () => {
+    document.getElementById('contact-modal').classList.add('hidden');
+    switchTab('gis');
+    setTimeout(() => {
+      gisMap?.focusPoint(centroid[0], centroid[1], 13);
+      startPlacementMode('apiary');
+    }, 100);
+  };
+
+  document.getElementById('contact-modal').classList.remove('hidden');
 }
 
 /* ==================== ПАСПОРТ КОЧЁВКИ ==================== */
