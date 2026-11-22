@@ -60,7 +60,7 @@ textarea {
 .app-header {
   background: linear-gradient(135deg, var(--bg-header) 0%, #1b3a29 65%, #234733 100%);
   color: var(--text-light);
-  padding: 14px 24px;
+  padding: 14px 0;
   border-bottom: 3px solid var(--amber);
   position: sticky;
   top: 0;
@@ -71,6 +71,7 @@ textarea {
 .header-inner {
   max-width: 1480px;
   margin: 0 auto;
+  padding: 0 24px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1151,6 +1152,9 @@ input[type='range'] {
   }
   .main-container {
     padding: 12px;
+  }
+  .header-inner {
+    padding: 0 12px;
   }
   .map-toolbar {
     padding: 8px 10px;
