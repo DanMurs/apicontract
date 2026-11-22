@@ -9,7 +9,7 @@ import {
   INITIAL_FIELDS,
   INITIAL_APIARIES,
   INITIAL_SATURN_TREATMENTS,
-} from './data.js?v=13';
+} from './data.js?v=14';
 import {
   ApiGisMap,
   analyzeSpatialCoverage,
@@ -18,13 +18,13 @@ import {
   polygonCentroid,
   haversineKm,
   isPointInWindPlume,
-} from './map.js?v=13';
+} from './map.js?v=14';
 import {
   calculateDualEconomics,
   evaluateMeteoConditions,
   fetchClusterWeather,
   formatWindDirection,
-} from './calculator.js?v=13';
+} from './calculator.js?v=14';
 
 const state = {
   activeTab: 'gis',
@@ -1042,19 +1042,6 @@ function bootstrap() {
     },
     onDeleteTreatment: (trId) => {
       deleteTreatmentById(trId);
-    },
-    onMoveApiary: (apiaryId, lat, lon) => {
-      const apiary = state.apiaries.find((a) => a.id === apiaryId);
-      if (!apiary) return;
-      apiary.lat = Number(lat.toFixed(4));
-      apiary.lon = Number(lon.toFixed(4));
-      refreshAll();
-      const hazard = state.treatments.find((tr) => haversineKm(apiary.lat, apiary.lon, tr.lat, tr.lon) <= 7.0);
-      if (hazard) {
-        showToast(`⚠️ «${apiary.name}» перемещена в 7-км зону обработки ${hazard.saturnNumber}!`);
-      } else {
-        showToast(`📍 Позиция «${apiary.name}» обновлена — радиусы 2 км пересчитаны.`);
-      }
     },
   });
 

@@ -4,7 +4,7 @@
  * и сектор ветрового сноса пестицидов.
  */
 
-import { CROPS_DB, PESTICIDE_CLASSES, CLUSTER_CENTER } from './data.js?v=13';
+import { CROPS_DB, PESTICIDE_CLASSES, CLUSTER_CENTER } from './data.js?v=14';
 
 const EARTH_RADIUS_KM = 6371;
 
@@ -647,7 +647,7 @@ export class ApiGisMap {
             ✅ Безопасное расположение (за пределами сноса СЗР)
            </div>`;
 
-      const marker = window.L.marker([apiary.lat, apiary.lon], { icon, draggable: true })
+      const marker = window.L.marker([apiary.lat, apiary.lon], { icon })
         .bindPopup(
           `<div style="min-width:240px;font-family:Inter,sans-serif;">
             <div style="font-weight:800;font-size:13.5px;">🐝 ${apiary.name}</div>
@@ -655,8 +655,7 @@ export class ApiGisMap {
             <div style="font-size:12.5px;line-height:1.45;">
               <b>Мощность:</b> ${apiary.hivesCount} пчелосемей<br/>
               <b>Транспорт:</b> ${apiary.trailerType}<br/>
-              <b>Телефон:</b> ${apiary.phone}<br/>
-              <span style="font-size:11px;color:#64748b;">💡 Метку можно перетащить мышью / пальцем по карте</span>
+              <b>Телефон:</b> ${apiary.phone}
             </div>
             ${hazardBlock}
             <div style="display:flex;gap:6px;margin-top:9px;">
@@ -670,13 +669,6 @@ export class ApiGisMap {
           </div>`
         )
         .addTo(this.layers.apiaries);
-
-      marker.on('dragend', (e) => {
-        const pos = e.target.getLatLng();
-        if (typeof this.callbacks.onMoveApiary === 'function') {
-          this.callbacks.onMoveApiary(apiary.id, pos.lat, pos.lng);
-        }
-      });
 
       marker.on('popupopen', () => {
         const editBtn = document.querySelector(`[data-edit-apiary="${apiary.id}"]`);
