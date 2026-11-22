@@ -437,10 +437,11 @@ export class ApiGisMap {
         fillOpacity: 0.48,
       })
         .bindPopup(
-          `<div style="font-family:Inter,sans-serif;min-width:230px;">
+          `<div style="font-family:Inter,sans-serif;min-width:240px;">
             <div style="font-weight:800;color:#b91c1c;">☢️ ФГИС «Сатурн» №${tr.saturnNumber}</div>
             <div style="font-size:12px;margin:4px 0;"><b>${tr.farm}</b><br/>Кадастр: ${tr.cadastral}</div>
             <div style="font-size:12px;line-height:1.45;">
+              <b>Культура:</b> ${tr.crop}<br/>
               <b>Препарат:</b> ${tr.pesticideName}<br/>
               <b>Опасность:</b> ${pInfo.title}<br/>
               <b>Буфер по ФЗ-490:</b> ${pInfo.bufferRadiusKm} км<br/>
@@ -449,7 +450,14 @@ export class ApiGisMap {
             <div style="margin-top:6px;font-size:11.5px;color:#991b1b;background:#fee2e2;padding:5px;border-radius:6px;">
               ${pInfo.recommendation}
             </div>
-            <button data-delete-treatment="${tr.id}" style="width:100%;margin-top:8px;padding:6px 10px;border:1px solid #fca5a5;border-radius:6px;background:#fee2e2;color:#b91c1c;font-size:12px;font-weight:700;cursor:pointer;">
+            ${
+              tr.sourceUrl
+                ? `<a href="${tr.sourceUrl}" target="_blank" rel="noopener" style="display:block;text-align:center;margin-top:8px;padding:6px 10px;border-radius:6px;background:#f8fafc;border:1px solid #cbd5e1;color:#0f172a;font-size:12px;font-weight:600;text-decoration:none;">
+                    🔗 Проверить оригинал на bee-saturn.ru ↗
+                   </a>`
+                : ''
+            }
+            <button data-delete-treatment="${tr.id}" style="width:100%;margin-top:6px;padding:6px 10px;border:1px solid #fca5a5;border-radius:6px;background:#fee2e2;color:#b91c1c;font-size:12px;font-weight:700;cursor:pointer;">
               🗑️ Убрать зону СЗР с карты
             </button>
           </div>`

@@ -126,43 +126,29 @@ textarea {
   color: #b7cbc0;
 }
 
-/* Role Switcher */
-.role-switcher {
-  display: flex;
-  background: rgba(0, 0, 0, 0.25);
-  padding: 4px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  gap: 4px;
-}
-
-.role-btn {
-  border: none;
-  background: transparent;
-  color: #cbd5d0;
-  padding: 8px 14px;
-  border-radius: 8px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.18s ease;
-  display: flex;
+/* Header Source Link */
+.header-source-pill {
+  display: inline-flex;
   align-items: center;
   gap: 6px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  color: #fde68a;
+  text-decoration: none;
+  font-size: 0.84rem;
+  font-weight: 600;
+  transition: background 0.18s ease, border-color 0.18s ease;
 }
 
-.role-btn:hover {
+.header-source-pill:hover {
+  background: rgba(245, 158, 11, 0.22);
+  border-color: var(--amber);
   color: #ffffff;
-  background: rgba(255, 255, 255, 0.08);
 }
 
-.role-btn.active {
-  background: var(--amber);
-  color: #132a1e;
-  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.35);
-}
-
-/* Top Navigation Tabs & KPI Strip */
+/* Top Navigation Tabs & Main Container */
 .main-container {
   max-width: 1480px;
   margin: 0 auto;

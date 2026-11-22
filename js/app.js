@@ -26,7 +26,6 @@ import {
 } from './calculator.js';
 
 const state = {
-  role: 'dispatcher',
   activeTab: 'gis',
   fields: structuredClone(INITIAL_FIELDS),
   apiaries: structuredClone(INITIAL_APIARIES),
@@ -43,12 +42,6 @@ const state = {
   },
   activePassportFieldId: null,
   lastAnalysis: null,
-};
-
-const ROLE_DESCRIPTIONS = {
-  dispatcher: 'Режим диспетчера АПК: видны все поля, кочевые прицепы, 7-км зоны ФГИС «Сатурн» и снос ветром.',
-  agronomist: 'Режим агронома: контролируйте дефицит опылителей на полях, считайте ROI и публикуйте заявки.',
-  beekeeper: 'Режим пчеловода: выбирайте поля без пестицидного риска, ставьте прицеп на карту и оформляйте Паспорт.',
 };
 
 let gisMap = null;
@@ -784,15 +777,6 @@ function switchTab(tabName) {
 }
 
 function bindEvents() {
-  // Переключение ролей
-  document.querySelectorAll('.role-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      state.role = btn.dataset.role;
-      document.querySelectorAll('.role-btn').forEach((b) => b.classList.toggle('active', b === btn));
-      showToast(ROLE_DESCRIPTIONS[state.role]);
-    });
-  });
-
   // Вкладки
   document.querySelectorAll('.view-tab').forEach((btn) => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
